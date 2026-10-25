@@ -1,9 +1,8 @@
 # Fold8 ColorOS port
 
 This ports the fixes tested on SM-F971B / h8q / SM8850 with the Find N6
-ColorOS 17 image (`coloros17-findn6`, PLP120_17.0.0.109(CN01)). The clone's
-profile table predates Fold8 support, so it adds an explicit `f8` profile and
-`n6-f8` package set. It does not widen the Ultra's hardware match, enable a
+ColorOS 17 image (`coloros17-findn6`, PLP120_17.0.0.109(CN01)). OneOS 0.4.13 supplies the `f8` profile; its Find N6 choice uses the
+separate `n6-f8` package set while its Pixel choice stays unchanged. It does not widen the Ultra's hardware match, enable a
 new image, or change the screen-lock or OneLineage startup requirements.
 
 ## Included
@@ -37,11 +36,18 @@ new image, or change the screen-lock or OneLineage startup requirements.
   These are guest-only mounts; host app/account data is not copied. Local
   network permission is left to the user rather than granted automatically.
 
-The older N6 baseline's services.jar is upgraded with the repository's
-biometric, gatekeeper, FRP, APEX-install, app-id and user-creation guards before
-Google services are exposed. Existing storage/weaver/power guards remain.
-A stage containing old guest app ids 10000–14999 is refused before shutdown;
-prepare fresh guest data rather than bypassing that refusal.
+The 0.4.13 N6 baseline's jars, guarded guest vold and in-guest return app
+are preserved byte for byte. Its guard manifest already includes biometric,
+gatekeeper, FRP, APEX-install, app-id and user-creation protection. An existing stage
+with guest app ids 10000–14999 retains its apps/data and skips Google binary
+injection. The display repairs remain available; injection only runs when
+the guarded app-ID layout is already present.
+
+The Fold8 SystemUI bind is installed after the system_ext overlay so that
+overlay cannot hide it. Split-permission cleanup removes only mounts sourced
+from this stage's `oneos_split_<number>.xml`, preserving the foldable feature
+configuration and other permissions overrides. `scripts/test-permission-cleanup.py`
+checks full and /data-relative mount roots and unrelated/foreign XML mounts.
 
 ## Build
 
@@ -98,16 +104,22 @@ expect GNU command semantics (not macOS's BSD `stat` and `find`).
 
 The individual UI fixes were tested in the earlier modified ColorOS session;
 this integrated source build still needs a fresh launch and fold/unfold/AOD/
-widget/Play Store check on the device. No phone installation or OS switch is
-part of this source change. Runtime installation failures are recorded in
+widget/Play Store check on the device. The repair APK can be installed and
+staged while the phone remains in One UI; this does not verify a guest boot. Runtime installation failures are recorded in
 `$STAGE/fold8_runtime.log`, and hinge producer errors in the guest's
 `/data/local/tmp/oneos-angle.log`.
 
-Local source-port verification: full app Kotlin compilation succeeded; 197
-model tests, 106 root tests and four Python regressions passed (one additional
-root test skipped for absent run logs). The 33 shell staging tests used local
-GNU stat/find compatibility shims and simulated free space confined to the
-fake test root; production checks were unchanged. A clean package rebuild
-reproduced all 27 checked-in payload hashes exactly. SystemUI retained all
-73,029 original classes plus the two intended helpers, and both patched
-SystemUI and services.jar passed the DEX checks.
+Verification for the 0.4.13 refresh: 196 model tests passed. The full root
+suite ran 113 tests with one absent-log skip; three package-set expectations
+were corrected and passed an 18-case targeted rerun. Five Fold8 Python checks
+(including pristine donor patching) and two permissions/mount-order regressions
+passed. The Android private-mount test retained a real foldable feature bind
+while removing the split-permission bind, without changing the host namespace.
+SystemUI and the current baseline services.jar passed the DEX checks.
+
+The APK was packaged with all six package sets. Its 118 content-addressed
+payloads, every set manifest, the root script and generated BuildConfig pins
+were checked after packaging. Limited Mac disk space required reusing the
+verified compressed assets and removing recoverable unpacked build copies;
+this did not change the shipped file contents or checks. A full clean rebuild
+and fresh ColorOS launch of this refresh remain separate device/build checks.

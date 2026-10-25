@@ -32,7 +32,12 @@ snapshot)
         grep '^#' "$STAGE/guards.txt" | grep -qw "$guard" || fail "missing $guard guard"
     done
     if awk '$2 >= 10000 && $2 <= 14999 {f=1} END {exit !f}' "$STAGE/data/system/packages.list" 2>/dev/null; then
-        fail 'old guest app ids; prepare fresh guest data before enabling Google services'
+        # Keep an existing installation usable without enabling new Google
+        # binary mounts on its legacy app IDs. Its installed apps/data stay.
+        [ ! -L "$STAGE/fold8_google_mode" ] || fail 'Google mode is a symlink'
+        printf '%s\n' existing > "$STAGE/fold8_google_mode"
+        echo 'Fold8 ColorOS: preserving legacy app IDs; Google binary injection is disabled'
+        exit 0
     fi
     plain_tree "$STAGE/fold8_google"
     [ ! -e "$STAGE/fold8_google" ] || [ -d "$STAGE/fold8_google" ] || fail 'Google cache is not a directory'
@@ -70,11 +75,14 @@ snapshot)
         rm -rf "$STAGE/fold8_google/.${name}-previous-$$"
     done
     verify_google
+    [ ! -L "$STAGE/fold8_google_mode" ] || fail 'Google mode is a symlink'
+    printf '%s\n' snapshot > "$STAGE/fold8_google_mode"
     ;;
 prepare)
     selected || exit 0
     ROOTFS="$STAGE/rootfs"
-    verify_google
+    google_mode=$(cat "$STAGE/fold8_google_mode" 2>/dev/null || echo snapshot)
+    case "$google_mode" in snapshot) verify_google ;; existing) ;; *) fail 'unknown Google mode' ;; esac
     target="$ROOTFS/system/system_ext/priv-app/SystemUI/SystemUI.apk"
     "$BB" umount -l "$target" 2>/dev/null || true
     [ -f "$target" ] && [ ! -L "$target" ] || fail 'unexpected SystemUI path'
@@ -82,6 +90,7 @@ prepare)
     "$BB" mount --bind "$STAGE/Fold8SystemUI.apk" "$target"
     "$BB" mount --make-private "$target"
     "$BB" mount -o remount,bind,ro "$STAGE/Fold8SystemUI.apk" "$target"
+    if [ "$google_mode" = snapshot ]; then
     for spec in GmsCore:GmsCore Phonesky:GooglePlayServicesUpdater; do
         name=${spec%:*}; slot=${spec#*:}
         target="$ROOTFS/my_product/priv-app/$slot"
@@ -95,6 +104,7 @@ prepare)
         "$BB" mount --make-private "$target"
         "$BB" mount -o remount,bind,ro "$STAGE/fold8_google/$name" "$target"
     done
+    fi
     dest="$STAGE/data/oneos_fold8"
     plain_tree "$dest"
     mkdir -p "$dest"

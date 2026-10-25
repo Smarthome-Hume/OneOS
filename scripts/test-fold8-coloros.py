@@ -56,6 +56,20 @@ class Fold8Tests(unittest.TestCase):
             self.assertIn(b'missing gatekeeper guard', r.stderr)
             self.assertFalse((stage / 'fold8_google').exists())
 
+    def test_legacy_data_skips_google_injection_without_losing_ui_repairs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stage = Path(tmp)
+            (stage / '.oneos_stage').write_text(json.dumps(dict(image='coloros17-findn6', set='n6-f8', created=0), indent=2) + '\n')
+            (stage / 'guards.txt').write_text('# gatekeeper pdb apexd appid15000\n')
+            (stage / 'data/system').mkdir(parents=True)
+            (stage / 'data/system/packages.list').write_text('old.app 10001 0 /data/user/0/old.app default none\n')
+            env = dict(os.environ, STAGE=tmp, ONEOS_PROFILE='f8', BB='/does/not/exist')
+            r = subprocess.run(['/bin/sh', str(SCRIPT), 'snapshot'], env=env, capture_output=True)
+            self.assertEqual(0, r.returncode, r.stderr)
+            self.assertEqual('existing\n', (stage / 'fold8_google_mode').read_text())
+            self.assertFalse((stage / 'fold8_google').exists())
+            self.assertTrue((stage / 'data/system/packages.list').exists())
+
     def test_exact_patch_and_atomic_refusal(self):
         if not ORIGINAL:
             self.skipTest('pass a pristine apktool SystemUI directory for the image regression')

@@ -87,39 +87,6 @@ def repack(original, rebuilt, output, zipalign):
                 assert src.read(n) == dst.read(n), n
 
 
-def upgrade_guards(out, work, apk):
-    # The clone's N6 baseline predates these additional safety guards. Apply
-    # every patcher to the whole jar and rebuild every dex it reports,
-    # including biometric cleanup in classes.dex (not only classes2/3).
-    decoded = work / 'services'
-    apk('d', '-q', '-f', '-r', '-o', decoded, out / 'services_patched.jar')
-    dirs = set()
-    for name in ['guest_no_biometric_cleanup', 'guest_no_gatekeeper', 'guest_pdb_readonly',
-                 'guest_no_apex_installs', 'guest_app_id_offset', 'guest_no_new_users']:
-        result = subprocess.check_output(['python3', '-I', str(ROOT / f'switcher/patches/{name}.py'), str(decoded)], text=True)
-        dirs.update(result.split())
-    if dirs != {'smali', 'smali_classes2', 'smali_classes3'}:
-        raise ValueError(f'Guard dex layout differs: {dirs}')
-    rebuilt = work / 'services-rebuilt.jar'
-    apk('b', '-q', '-o', rebuilt, decoded)
-    shutil.rmtree(decoded)
-    replace_guard_dex(out, rebuilt, dirs)
-    rebuilt.unlink()
-
-
-def replace_guard_dex(out, rebuilt, dirs):
-    dex = {'classes.dex' if d == 'smali' else d.replace('smali_', '') + '.dex' for d in dirs}
-    target = out / 'services_patched.jar'; temp = out / 'services.new.jar'
-    with zipfile.ZipFile(target) as original, zipfile.ZipFile(rebuilt) as updated, zipfile.ZipFile(temp, 'w') as dst:
-        for info in original.infolist():
-            data = updated.read(info.filename) if info.filename in dex else original.read(info.filename)
-            dst.writestr(info, data)
-    temp.replace(target)
-    header = '# framework overlays with storage, installd, power, sysrq, weaver, biometric, gatekeeper, pdb, apexd, appid15000 and nousers guards\n'
-    guards = header + ''.join(f'{sha(out / n)}  {n}\n' for n in ['services_patched.jar', 'oplus-services_patched.jar'])
-    temp = out / 'guards.new.txt'
-    temp.write_text(guards); temp.replace(out / 'guards.txt')
-
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
@@ -153,7 +120,8 @@ def main():
             if sha(source) != pin:
                 p.error(f'{source} differs from the existing N6 set')
             shutil.copyfile(source, out / name)
-        upgrade_guards(out, w, apk)
+        # The pinned 0.4.13 baseline already carries all guest safety guards.
+        # Preserve its jars and guest vold binaries exactly.
         run('python3', '-I', ROOT / 'scripts/check-dex.py', out / 'services_patched.jar')
         # Decode only the dex entries we replace. On macOS the complete
         # 73k-class tree consumes over a GiB; other dex entries are copied
