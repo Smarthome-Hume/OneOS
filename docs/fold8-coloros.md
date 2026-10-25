@@ -152,3 +152,6 @@ receive/finish integrity checks. On-device testing confirmed that the
 split-screen gesture opens the chooser and the taskbar works in split screen.
 The original Fold8 SystemUI payload was retained; experimental legacy
 split-helper bytecode changes are not included.
+
+Pixel guest AOD, persistent status-bar geometry and wallpaper restoration on
+the same Fold8 profile are covered in [pixel-fold8.md](pixel-fold8.md).
