@@ -78,6 +78,7 @@ data class ProfileResolution(
 
 /** The phones build 2 knows (PLAN.md "Profiles"). Built in; fix packs take this over later. */
 object Profiles {
+    const val ID_F8 = "f8"
     const val ID_F8U = "f8u"
     const val ID_S_ULTRA_8850 = "s-ultra-8850"
     const val ID_S_ULTRA_8750 = "s-ultra-8750"
@@ -104,6 +105,17 @@ object Profiles {
         "This phone has vendor API 202404 and kernel 6.6; the other systems' display path has only run on " +
             "vendor API 202504 (Snapdragon 8 Elite Gen 5).",
         R_OLDER_VENDOR,
+    )
+
+    /** Fold8 h8q: ColorOS Find N6 session tested on SM-F971B. */
+    val F8 = PhoneProfile(
+        id = ID_F8,
+        label = "Galaxy Z Fold8",
+        modelPrefix = "SM-F971",
+        codename = "h8q",
+        socModel = "SM8850",
+        form = FormFactor.FOLD,
+        choices = listOf(ImageChoice(Images.ID_FIND_N6, PackageSets.ID_N6_F8, tested = true)),
     )
 
     val F8U = PhoneProfile(
@@ -164,7 +176,7 @@ object Profiles {
         notes = listOf(OLDER_VENDOR),
     )
 
-    val BUILT_IN: List<PhoneProfile> = listOf(F8U, S_ULTRA_8850, S_ULTRA_8750, S_8750)
+    val BUILT_IN: List<PhoneProfile> = listOf(F8U, S_ULTRA_8850, S_ULTRA_8750, S_8750, F8)
 
     /** `ro.build.version.oneui` values seen on profiled phones (all One UI 9.0). */
     val ONE_UI_SEEN: Set<Int> = setOf(90000)

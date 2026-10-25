@@ -94,7 +94,7 @@ IMAGE_SDK=37
 # installd codes the guard jars carry (InstalldExpected.SHA256).
 INSTALLD_SHA=791e52c441b62944f88244a2610b9433c869c9c3916a49f43d14552de82280f2
 # Session scripts from switcher/assets plus the expected installd table.
-SCRIPTS="oneos_switch.sh guest_prepare.sh guest_start.sh guest_props.sh return_to_oneui.sh check_host_apex.sh bridges.sh zygote_exec host_installd.txt"
+SCRIPTS="oneos_switch.sh guest_prepare.sh guest_start.sh guest_props.sh return_to_oneui.sh check_host_apex.sh bridges.sh fold8_coloros.sh zygote_exec host_installd.txt"
 SET_COMMON="services_patched.jar oplus-services_patched.jar ims-ext-common_patched.jar oplus-telephony-common_patched.jar surfaceflinger_patched guards.txt art_payload.img i18n_payload.img runtime_payload.img sdkext_payload.img crashrecovery_payload.img extservices_payload.img permission_payload.img wifi_payload.img appsearch_payload.img mediaprovider_payload.img adservices_payload.img rkpd_payload.img healthfitness_payload.img ondevicepersonalization_payload.img configinfrastructure_payload.img"
 # The Pixel set (0.3.7): services.jar with the guest vold as gvld, the signal
 # poll, Pixel's status bar RRO, the in-guest OneOS app and its own payloads.
@@ -111,6 +111,7 @@ IMAGES_GMS=""
 # S25 Ultra from 0.3.1, the Galaxy S25 from 0.3.4).
 profile_info() {
     case "$1" in
+        f8) echo "SM-F971 h8q SM8850 fold" ;;
         f8u) echo "SM-F976 q8q SM8850 fold" ;;
         s-ultra-8850) echo "SM-S948 m3q SM8850 bar" ;;
         s-ultra-8750) echo "SM-S938 pa3q SM8750 bar" ;;
@@ -124,6 +125,7 @@ profile_info() {
 # image; the staged image decides the set.
 profile_set() {
     case "$1 $2" in
+        "f8 coloros17-findn6") echo n6-f8 ;;
         "f8u coloros17-findn6") echo n6-f8u ;;
         "f8u pixel11fold-yogi") echo pixel-f8u ;;
         "s-ultra-8850 coloros17-findx9u") echo x9u-sultra ;;
@@ -151,6 +153,7 @@ image_raw() {
 set_files() {
     case "$1" in
         n6-f8u) echo "$SET_COMMON OneOSWallpapersFoldGrid.apk" ;;
+        n6-f8) echo "$SET_COMMON OneOSWallpapersFoldGrid.apk Fold8SystemUI.apk Fold8AngleRelay.dex Fold8Aod.apk Fold8UMS.apk Fold8Instant.apk" ;;
         x9u-sultra) echo "$SET_COMMON" ;;
         pixel-f8u) echo "$SET_PIXEL" ;;
         *) return 1 ;;
@@ -160,7 +163,7 @@ set_files() {
 # <set>: the image it was built from (scripts/make-overlays.sh, PackageSet.imageId).
 set_image() {
     case "$1" in
-        n6-f8u) echo coloros17-findn6 ;;
+        n6-f8u|n6-f8) echo coloros17-findn6 ;;
         x9u-sultra) echo coloros17-findx9u ;;
         pixel-f8u) echo pixel11fold-yogi ;;
         *) return 1 ;;
@@ -448,7 +451,7 @@ check_files() { # <names>
         [ -d "$f" ] && [ ! -L "$f" ] && continue
         n=${f##*/}
         case "$n" in
-            *_patched*|*_payload.img|*.apk|*.jar|*.so|*.sh|zygote_exec|clean_apex_info_list.xml|oneos-*)
+            *_patched*|*_payload.img|*.apk|*.jar|*.so|*.sh|Fold8AngleRelay.dex|zygote_exec|clean_apex_info_list.xml|oneos-*)
                 in_list "$n" "$1" || refuse "$n is in the stage but was not prepared (left from an older stage)" ;;
         esac
     done

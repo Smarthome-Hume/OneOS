@@ -306,6 +306,14 @@ add)
             echo "guest_props: $NM=true for the session (Night Light: the image's treble NightMode overlay)"
         fi
     fi
+    # Find N6 camera geometry is wrong for the Fold8 cover (1248 px wide).
+    # This is added to the session-only property list and removed on return.
+    if [ "${ONEOS_PROFILE:-}" = f8 ] &&
+       grep -q '^  "image": "coloros17-findn6",$' "$STAGE/.oneos_stage"; then
+        key=ro.oplus.display.secondary.screenhole.position
+        sed -i "/^$key=/d" "$NEW"
+        echo "$key=589,0:659,104" >> "$NEW"
+    fi
     if "$RP" -n -f "$NEW" 2>/dev/null; then
         cut -d= -f1 "$NEW" > "$ADDED"
     else

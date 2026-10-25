@@ -35,6 +35,7 @@ object AppAssets {
     }
 
     private fun pinned(set: String): String = when (set) {
+        PackageSets.ID_N6_F8 -> BuildConfig.SET_N6_F8_SHA256
         PackageSets.ID_N6_F8U -> BuildConfig.SET_N6_F8U_SHA256
         PackageSets.ID_X9U_SULTRA -> BuildConfig.SET_X9U_SULTRA_SHA256
         PackageSets.ID_PIXEL_F8U -> BuildConfig.SET_PIXEL_F8U_SHA256

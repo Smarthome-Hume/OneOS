@@ -63,7 +63,7 @@ class ProfilesTest {
         assertTrue(s25Base.testedWithAnyImage && s25Base.enabled)
         assertEquals(s25.notes, s25Base.notes)
         assertEquals(listOf("profile-vendor-older"), s25Base.notes.map { it.id })
-        assertEquals(listOf(Profiles.F8U, Profiles.S_ULTRA_8850, Profiles.S_ULTRA_8750, Profiles.S_8750), Profiles.BUILT_IN)
+        assertEquals(listOf(Profiles.F8U, Profiles.S_ULTRA_8850, Profiles.S_ULTRA_8750, Profiles.S_8750, Profiles.F8), Profiles.BUILT_IN)
 
         // Ids unique; every choice names an image and a set built from that image,
         // each image once per profile; the fold grid with a ColorOS image (an oplus
@@ -87,7 +87,7 @@ class ProfilesTest {
         }
         assertNull(Profiles.F8U.choice(Images.ID_FIND_X9U))
         // The owner does not want the X9U (CN) image on the Fold: only the N6 and Pixel images there.
-        assertEquals(listOf(Profiles.F8U), Profiles.BUILT_IN.filter { it.form == FormFactor.FOLD })
+        assertEquals(listOf(Profiles.F8U, Profiles.F8), Profiles.BUILT_IN.filter { it.form == FormFactor.FOLD })
         assertTrue(Profiles.BUILT_IN.filter { it.choice(Images.ID_FIND_X9U) != null }.all { it.form == FormFactor.BAR })
         // The Pixel image only where it ran (0.3.7): the Fold, with its own set.
         assertEquals(listOf(Profiles.F8U), Profiles.BUILT_IN.filter { it.choice(Images.ID_PIXEL_YOGI) != null })
@@ -96,6 +96,22 @@ class ProfilesTest {
         assertTrue(Profiles.BUILT_IN.all { p -> p.choices.none { it.imageId == "coloros17-findx9u-in" || it.packageSetId.startsWith("x9u-in") } })
         // Every built-in image is some profile's.
         assertEquals(Images.ALL.map { it.id }.toSet(), Profiles.BUILT_IN.flatMap { p -> p.choices.map { it.imageId } }.toSet())
+    }
+
+    @Test
+    fun fold8UsesOnlyItsColorOsSetAndRetainsLockRequirement() {
+        val fold = Profiles.resolve("SM-F971B", "h8q", "SM8850").profile
+        assertEquals(Profiles.F8, fold)
+        assertNull(Profiles.resolve("SM-F971B", "q8q", "SM8850").profile)
+        assertNull(Profiles.resolve("SM-F971B", "h8q", "SM8750").profile)
+        assertEquals(listOf(ImageChoice(Images.ID_FIND_N6, PackageSets.ID_N6_F8, true)), fold!!.choices)
+        assertNull(fold.choice(Images.ID_PIXEL_YOGI))
+        assertTrue(SessionEnv.validate(SessionEnv.generate(fold)).isEmpty())
+        assertEquals(Level.BLOCK, ScreenLockRule.switchGate(true).level)
+        val extra = (PackageSets.N6_F8.names - PackageSets.N6_F8U.names).toSet()
+        assertEquals(setOf("Fold8SystemUI.apk", "Fold8AngleRelay.dex", "Fold8Aod.apk", "Fold8UMS.apk", "Fold8Instant.apk"), extra)
+        assertTrue(PackageSets.X9U_SULTRA.names.intersect(extra).isEmpty())
+        assertTrue(PackageSets.PIXEL_F8U.names.intersect(extra).isEmpty())
     }
 
     @Test

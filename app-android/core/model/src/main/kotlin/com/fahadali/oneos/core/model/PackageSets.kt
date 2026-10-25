@@ -4,6 +4,8 @@ import java.util.Locale
 
 /** What a staged file is for; decides its mode and how the scripts use it (guest_prepare.sh). */
 enum class FileRole {
+    /** Pinned Fold8-only guest UI, app or sensor helper; never executed in One UI. */
+    GUEST_FIX,
     /** services / oplus-services: carry the storage, installd and sysrq guards; pinned by guards.txt. */
     GUARD_JAR,
     /**
@@ -144,6 +146,7 @@ data class PackageSet(
 }
 
 object PackageSets {
+    const val ID_N6_F8 = "n6-f8"
     const val ID_N6_F8U = "n6-f8u"
     const val ID_X9U_SULTRA = "x9u-sultra"
     const val ID_PIXEL_F8U = "pixel-f8u"
@@ -202,6 +205,18 @@ object PackageSets {
         approxBytes = 264_053_591L,
     )
 
+    /** Original N6 guard/payload set plus the isolated Fold8 ColorOS fixes. */
+    val N6_F8 = PackageSet(
+        id = ID_N6_F8,
+        imageId = Images.ID_FIND_N6,
+        sourceDir = "out/overlays_n6_fold8",
+        files = N6_F8U.files + listOf(
+            "Fold8SystemUI.apk", "Fold8AngleRelay.dex", "Fold8Aod.apk", "Fold8UMS.apk", "Fold8Instant.apk",
+        ).map { PackageFile(it, FileRole.GUEST_FIX) },
+        omitted = listOf(TETHERING),
+        approxBytes = 659_706_088L,
+    )
+
     val X9U_SULTRA = PackageSet(
         id = ID_X9U_SULTRA,
         imageId = Images.ID_FIND_X9U,
@@ -245,7 +260,7 @@ object PackageSets {
         hasReturnApp = true,
     )
 
-    val ALL: List<PackageSet> = listOf(N6_F8U, X9U_SULTRA, PIXEL_F8U)
+    val ALL: List<PackageSet> = listOf(N6_F8U, X9U_SULTRA, PIXEL_F8U, N6_F8)
 
     fun byId(id: String, sets: List<PackageSet> = ALL): PackageSet? = sets.firstOrNull { it.id == id }
 }

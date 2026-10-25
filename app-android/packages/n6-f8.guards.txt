@@ -1,0 +1,3 @@
+# framework overlays with storage, installd, power, sysrq, weaver, biometric, gatekeeper, pdb, apexd, appid15000 and nousers guards
+0122bc7a0ce0ee4a3ef5a3784575a41c622308eaa5046958919ab3ec7b1b8598  services_patched.jar
+91aad484ad6dde80e710039e7f82d765b648188b81a3cdb9ef5096005b27c0b2  oplus-services_patched.jar

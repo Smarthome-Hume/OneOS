@@ -94,7 +94,7 @@ fi
 root_only "$STAGE" || app_refuse "$STAGE is not root's or is writable by others ($(stat -c '%U:%G %A' "$STAGE" 2>/dev/null))"
 [ -f "$STAGE/system.raw" ] || refuse "the guest image ($STAGE/system.raw) is not staged"
 for f in oneos_switch.sh guest_prepare.sh guest_start.sh guest_props.sh return_to_oneui.sh \
-         check_host_apex.sh bridges.sh zygote_exec guards.txt services_patched.jar; do
+         check_host_apex.sh bridges.sh fold8_coloros.sh zygote_exec guards.txt services_patched.jar; do
     [ -f "$STAGE/$f" ] || refuse "$STAGE/$f is missing"
 done
 # The guarded jars: services_patched.jar, and oplus-services_patched.jar for a
@@ -115,7 +115,7 @@ if [ "$APP" = 1 ]; then
                $2 == "system.raw" || seen[$2]++ { print NR ": " $0 }' "$SUMS" | head -3)
     [ -z "$bad" ] || refuse "files.sha256 has malformed lines: $bad"
     for need in oneos_switch.sh guest_prepare.sh guest_start.sh guest_props.sh return_to_oneui.sh \
-                check_host_apex.sh bridges.sh zygote_exec guards.txt $GUARD_JARS; do
+                check_host_apex.sh bridges.sh fold8_coloros.sh zygote_exec guards.txt $GUARD_JARS; do
         awk -v n="$need" '$2 == n { f = 1 } END { exit !f }' "$SUMS" || refuse "files.sha256 does not list $need"
     done
     while read -r sum name || [ -n "$sum" ]; do
@@ -221,6 +221,10 @@ case "$SPLASH_COMPONENT" in
     *) refuse "ONEOS_SPLASH_COMPONENT=$SPLASH_COMPONENT is not package/.Activity" ;;
 esac
 echo "Preflight passed (ONEOS_APP=$APP, profile ${ONEOS_PROFILE:-none}, busybox $BB, resetprop $RP, mount namespace $SELF_NS)"
+
+# Capture only APK binaries while the host package manager still runs. This
+# also checks the GMS safety guards before any host shutdown.
+STAGE="$STAGE" BB="$BB" /system/bin/sh "$STAGE/fold8_coloros.sh" snapshot || refuse "Fold8 ColorOS snapshot failed"
 
 # mksh keeps a short here-document in memory and writes a long one to a temp
 # file in $TMPDIR, a directory it accepts once, when the shell starts, and
@@ -1418,6 +1422,10 @@ while true; do
             fi
             echo '[UI Activator] Creating missing app data dirs...'
             $BB nsenter -t \$PID -m /system/bin/sh /data/oneos_genv.sh /system/bin/sh /data/local/tmp/fix_app_dirs.sh 2>/dev/null || true
+
+            if [ \"${ONEOS_PROFILE:-}\" = f8 ] && grep -q coloros17-findn6 \"$STAGE/.oneos_stage\" && [ -f \"$STAGE/data/oneos_fold8/runtime.sh\" ]; then
+                $BB nsenter -t \$PID -m /system/bin/sh /data/oneos_genv.sh /system/bin/sh /data/oneos_fold8/runtime.sh runtime >\"$STAGE/fold8_runtime.log\" 2>&1 || echo '[UI Activator] Fold8 runtime setup failed; see fold8_runtime.log'
+            fi
 
             # Populate network permissions for all installed packages
             for uid in \$($BB nsenter -t \$PID -m /system/bin/sh /data/oneos_genv.sh /system/bin/pm list packages -U 2>/dev/null | grep -o 'uid:[0-9]*' | cut -d: -f2 | sort -u); do

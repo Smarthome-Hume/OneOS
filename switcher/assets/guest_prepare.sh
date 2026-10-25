@@ -62,7 +62,7 @@ for s in data misc misc/adb misc/profiles misc/user misc/bluedroid misc/bluetoot
          misc_ce/0 misc_de/0 system system/devicestate system/package_cache \
          system/watchdog_timestamps system_de system_ce user/0 user_de/0 \
          oneos_bin oneos_bin/busybox zygote_exec oplus oplus/multimedia \
-         preapps-lib media/0 anr app local/tmp resource-cache; do
+         preapps-lib media/0 anr app local/tmp resource-cache oneos_fold8; do
     no_symlink "$s"
 done
 # The framework jars must be the ones built with the storage, installd and
@@ -248,6 +248,9 @@ done
 # guest's tree does not have.
 GUEST_SYSTEM_EXT="$ROOTFS/system_ext"
 [ -L "$GUEST_SYSTEM_EXT" ] && GUEST_SYSTEM_EXT="$ROOTFS/system/system_ext"
+# Apply only the Fold8/Find N6 set. Does nothing for all other profiles/images.
+STAGE="$STAGE" BB="$BB" /system/bin/sh "$STAGE/fold8_coloros.sh" prepare || exit 3
+
 # Signal bars in a guest without ColorOS's OplusSignalSmooth (run 43, Pixel):
 # Samsung's RIL sends the guest no signal strength indication and AOSP polls
 # only for opportunistic subscriptions, so both SIMs kept the all-invalid value
@@ -500,6 +503,14 @@ FORM="${ONEOS_GUEST_FORM:-fold}"
 case "$FORM" in fold|tablet|phone) ;; *) echo "WARNING: ONEOS_GUEST_FORM=$FORM unknown, using fold"; FORM=fold ;; esac
 if [ -f "$FEAT" ]; then
     ADDED="oplus.software.display.multibits_dimming_support"
+    if [ "${ONEOS_PROFILE:-}" = f8 ] &&
+       grep -q '^  "image": "coloros17-findn6",$' "$STAGE/.oneos_stage"; then
+        ADDED="$ADDED oplus.software.support_fluid_entry oplus.software.fluid_replace_ntf"
+        ADDED="$ADDED oplus.software.display.aod_support oplus.software.adaptive_smooth_animation"
+        ADDED="$ADDED oplus.software.flexible_exchange_animation"
+        ADDED="$ADDED oplus.software.wallpaper.separate_wallpaper_for_multi_display"
+        ADDED="$ADDED oplus.software.audio.haptic_channel_support"
+    fi
     case "$FORM" in
         fold) ADDED="$ADDED oplus.hardware.type.fold"
             if [ "${ONEOS_GUEST_UNFOLD_PORTRAIT:-1}" = 1 ]; then

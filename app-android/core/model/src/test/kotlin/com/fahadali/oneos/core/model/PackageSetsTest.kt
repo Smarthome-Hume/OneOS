@@ -35,7 +35,7 @@ class PackageSetsTest {
         assertEquals("out/overlays", n6.sourceDir)
         assertEquals("out/overlays_x9u", x9u.sourceDir)
         assertEquals("out/overlays_pixel_yogi", pixel.sourceDir)
-        assertEquals(listOf(n6, x9u, pixel), PackageSets.ALL)
+        assertEquals(listOf(n6, x9u, pixel, PackageSets.N6_F8), PackageSets.ALL)
         // Owner: leave out only dead weight.
         assertEquals(listOf("tethering_payload.img"), n6.omitted)
         assertEquals(listOf("tethering_payload.img", "OneOSWallpapersFoldGrid.apk"), x9u.omitted)

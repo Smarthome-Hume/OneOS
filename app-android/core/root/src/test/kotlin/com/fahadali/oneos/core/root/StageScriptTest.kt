@@ -27,6 +27,18 @@ import java.io.File
 class StageScriptTest {
     private val shells = TestShell.available()
 
+    @Test
+    fun fold8StagesItsOwnColorOsSet() = eachShell { fr ->
+        fr.props["ro.product.model"] = "SM-F971B"
+        fr.props["ro.product.device"] = "h8q"
+        fr.props["ro.soc.model"] = "SM8850"
+        fr.writeProps()
+        val stager = Stager(fr, Profiles.F8)
+        stager.prepare()
+        for (name in PackageSets.N6_F8.names) assertTrue(name, File(fr.stage, name).isFile)
+        assertTrue(File(fr.stage, ".oneos_stage").readText().contains("n6-f8"))
+    }
+
     private fun eachShell(script: ByteArray = Shipped.rootScript.readBytes(), block: (FakeRoot) -> Unit) {
         assumeTrue("no dash or busybox on this machine", shells.isNotEmpty())
         for (s in shells) {

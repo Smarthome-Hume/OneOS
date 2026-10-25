@@ -51,6 +51,9 @@ Pixel 11 Fold on the Galaxy Z Fold8 Ultra: calls and SMS on both SIMs, 5G and
 Wi-Fi, Bluetooth audio, Google Play and Google's apps, the inner and cover
 screens, blur, and Back to One UI (usually without a restart).
 
+Fold8 (SM-F971B / h8q) ColorOS source fixes and build inputs are documented
+in [docs/fold8-coloros.md](docs/fold8-coloros.md).
+
 Known open issues for each system are in `docs/pixel-guest.md` and
 `docs/coloros-on-fold.md`.
 

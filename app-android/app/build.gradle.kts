@@ -40,6 +40,7 @@ val packageSets: Map<String, Pair<File, List<String>>> = linkedMapOf(
     // OneOSGuest.apk included. (0.3.3-0.3.6 had the Find X9 Ultra IN sets from
     // out/overlays_x9u_in; that build was deleted from the server.)
     "pixel-f8u" to (File(repoRoot, "out/overlays_pixel_yogi") to listOf("tethering_payload.img")),
+    "n6-f8" to (File(repoRoot, "out/overlays_n6_fold8") to listOf("tethering_payload.img", "OneOSGuest.apk")),
 )
 // Session scripts copied from switcher/assets at build time (plus the expected
 // installd table). oneos_tunnel.sh (the server tunnel) and 7zz are never shipped.
@@ -51,6 +52,7 @@ val sessionScripts: Map<String, File> = linkedMapOf(
     "return_to_oneui.sh" to File(repoRoot, "switcher/assets/return_to_oneui.sh"),
     "check_host_apex.sh" to File(repoRoot, "switcher/assets/check_host_apex.sh"),
     "bridges.sh" to File(repoRoot, "switcher/assets/bridges.sh"),
+    "fold8_coloros.sh" to File(repoRoot, "switcher/assets/fold8_coloros.sh"),
     "zygote_exec" to File(repoRoot, "switcher/assets/zygote_exec"),
     "host_installd.txt" to File(repoRoot, "switcher/patches/host_installd.txt"),
 )
