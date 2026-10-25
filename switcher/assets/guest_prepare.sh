@@ -594,6 +594,9 @@ if [ -f "$FEAT" ]; then
         ADDED="$ADDED oplus.software.support_fluid_entry oplus.software.fluid_replace_ntf"
         ADDED="$ADDED oplus.software.display.aod_support oplus.software.adaptive_smooth_animation"
         ADDED="$ADDED oplus.software.flexible_exchange_animation"
+        # Stock Find N6: my_stock/etc/extension/com.oplus.oplus-feature.xml.
+        # The container does not load that component's feature catalogue.
+        ADDED="$ADDED oplus.software.flexible_freeform.support oplus.software.pocketstudio.support"
         ADDED="$ADDED oplus.software.wallpaper.separate_wallpaper_for_multi_display"
         ADDED="$ADDED oplus.software.audio.haptic_channel_support"
     fi

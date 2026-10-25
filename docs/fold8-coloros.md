@@ -27,6 +27,11 @@ new image, or change the screen-lock or OneLineage startup requirements.
 - Native lock-screen-linked Workshop AOD on either panel and a 0.12 doze
   brightness fallback. Native libraries are repaired only for the exact stock
   AOD APK. A later user-updated AOD is preserved.
+- Stock Find N6 Pocket Studio and flexible-freeform feature declarations,
+  scoped to Fold8 / Find N6. The container does not scan the stock
+  `my_stock/etc/extension/com.oplus.oplus-feature.xml` that enables them.
+  Restoring them selects the native multitasking path for the split-screen
+  gesture and taskbar integration.
 - Launcher taskbar feature-provider row and one-time taskbar/AOD defaults.
   Later user choices are retained. Live Alerts, fold animation, separate
   wallpapers and haptic-channel feature declarations are restored in the
@@ -141,3 +146,9 @@ construction and retaining the feature XML bind restored the inner display's
 foldable layout, confirmed on the device. This validates the staged script
 repairs; the complete APK for this latest script revision has not been rebuilt,
 and this run did not repeat every AOD, widget or fold-transition test.
+
+Pocket Studio was staged into installed OneOS version code 28 using its normal
+receive/finish integrity checks. On-device testing confirmed that the
+split-screen gesture opens the chooser and the taskbar works in split screen.
+The original Fold8 SystemUI payload was retained; experimental legacy
+split-helper bytecode changes are not included.
