@@ -90,6 +90,8 @@ not an APK for normal installation.
 
 ```sh
 python3 scripts/test-fold8-coloros.py /path/to/pristine/apktool/SystemUI
+python3 scripts/test-fold8-google-snapshot.py
+python3 scripts/test-permission-cleanup.py
 python3 scripts/check-dex.py out/overlays_n6_fold8/Fold8SystemUI.apk \
     out/overlays_n6_fold8/services_patched.jar
 cd app-android
@@ -123,3 +125,19 @@ were checked after packaging. Limited Mac disk space required reusing the
 verified compressed assets and removing recoverable unpacked build copies;
 this did not change the shipped file contents or checks. A full clean rebuild
 and fresh ColorOS launch of this refresh remain separate device/build checks.
+
+On-device launch check against OneOS 0.4.14: the original Fold8 snapshot
+stopped before host shutdown because BusyBox awk rejected its escaped-slash
+regular expression. APK library paths are now matched by components; archive
+errors stop the snapshot, and APKs without native libraries have a verified
+empty native manifest. The same path matcher is used for AOD library repair.
+Four ZIP/manifest regressions cover split APKs, no native libraries, malformed
+archives and modified native libraries. A real Android BusyBox fixture and
+snapshots of the installed Google apps passed too.
+
+With these scripts staged into 0.4.14, ColorOS reached its launcher and
+SystemUI without a kernel reboot. Moving the Fold8 hook after system_ext
+construction and retaining the feature XML bind restored the inner display's
+foldable layout, confirmed on the device. This validates the staged script
+repairs; the complete APK for this latest script revision has not been rebuilt,
+and this run did not repeat every AOD, widget or fold-transition test.

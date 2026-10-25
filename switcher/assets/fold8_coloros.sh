@@ -20,7 +20,7 @@ verify_google() {
     for name in GmsCore Phonesky; do
         dir="$STAGE/fold8_google/$name"
         plain_tree "$dir"
-        (cd "$dir" && sha256sum -c apk.sha256 && sha256sum -c native.sha256) >/dev/null || fail "invalid $name snapshot"
+        (cd "$dir" && sha256sum -c apk.sha256 && [ -f native.sha256 ] && { [ ! -s native.sha256 ] || sha256sum -c native.sha256; }) >/dev/null || fail "invalid $name snapshot"
     done
 }
 case "$1" in
@@ -56,15 +56,28 @@ snapshot)
             cp "$source" "$new/${source##*/}"
         done < "$new/source.paths"
         for apk in "$new"/*.apk; do
-            for entry in $("$BB" unzip -l "$apk" | "$BB" awk '$4 ~ /^lib\/arm64-v8a\/lib[^/]*\.so$/ {print $4}'); do
+            # BusyBox awk treats the doubled slash escapes as the end of the
+            # regex. Match path components instead, and check both commands:
+            # errors inside a for-loop substitution otherwise look like no libs.
+            "$BB" unzip -l "$apk" > "$new/archive.list" || fail 'cannot list APK'
+            entries=$("$BB" awk 'split($4, p, "/") == 3 && p[1] == "lib" && p[2] == "arm64-v8a" && p[3] ~ /^lib.*[.]so$/ {print $4}' "$new/archive.list") || fail 'cannot read APK library list'
+            for entry in $entries; do
                 lib=${entry##*/}
-                "$BB" unzip -p "$apk" "$entry" > "$new/lib/$lib"
+                "$BB" unzip -p "$apk" "$entry" > "$new/lib/$lib" || fail 'cannot extract native library'
                 [ -s "$new/lib/$lib" ] || fail 'empty native library'
                 rm -f "$new/lib/arm64/$lib"
                 ln "$new/lib/$lib" "$new/lib/arm64/$lib"
             done
         done
-        (cd "$new" && sha256sum ./*.apk > apk.sha256 && sha256sum lib/*.so lib/arm64/*.so > native.sha256)
+        rm -f "$new/archive.list"
+        # APKs without embedded arm64 libraries are valid too. Keep an explicit
+        # empty manifest instead of passing an unmatched glob to sha256sum.
+        (cd "$new" && sha256sum ./*.apk > apk.sha256 &&
+            : > native.sha256 &&
+            for f in lib/*.so lib/arm64/*.so; do
+                [ -f "$f" ] || continue
+                sha256sum "$f" >> native.sha256 || exit 1
+            done)
         chown -R 0:0 "$new"; find "$new" -type d -exec chmod 755 {} \;
         find "$new" -type f -exec chmod 644 {} \;
         if [ -e "$dir" ]; then
@@ -136,7 +149,7 @@ runtime)
         if [ "$(sha256sum "$aod" | cut -d' ' -f1)" = 87bfba25e06a5081f5feef73aef15a90dbc9b9f39b1fe756c68fd9975ac38638 ]; then
             libdir=${aod%/base.apk}/lib/arm64
             mkdir -p "$libdir"
-            for entry in $("$BB" unzip -l "$aod" | "$BB" awk '$4 ~ /^lib\/arm64-v8a\/lib[^/]*\.so$/ {print $4}'); do
+            for entry in $("$BB" unzip -l "$aod" | "$BB" awk 'split($4, p, "/") == 3 && p[1] == "lib" && p[2] == "arm64-v8a" && p[3] ~ /^lib.*[.]so$/ {print $4}'); do
                 "$BB" unzip -p "$aod" "$entry" > "$libdir/${entry##*/}"
                 chmod 644 "$libdir/${entry##*/}"
             done
