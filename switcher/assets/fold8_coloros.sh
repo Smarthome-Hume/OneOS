@@ -10,92 +10,18 @@ selected() {
         grep -q '^  "image": "coloros17-findn6",$' "$STAGE/.oneos_stage" &&
         grep -q '^  "set": "n6-f8",$' "$STAGE/.oneos_stage"
 }
-# Reject links anywhere below these new caches, including a guest-planted
-# link to host data. Existing stage/namespace checks run before this script.
+# Reject links anywhere below the new folder, including a guest-planted link
+# to host data. Existing stage/namespace checks run before this script.
+# Play services and the Play Store come from guest_google.sh (every ColorOS
+# set since 0.4.16).
 plain_tree() {
     [ ! -L "$1" ] || fail "$1 is a symlink"
     [ ! -d "$1" ] || [ -z "$(find "$1" -type l -print -quit)" ] || fail "symlink below $1"
 }
-verify_google() {
-    for name in GmsCore Phonesky; do
-        dir="$STAGE/fold8_google/$name"
-        plain_tree "$dir"
-        (cd "$dir" && sha256sum -c apk.sha256 && [ -f native.sha256 ] && { [ ! -s native.sha256 ] || sha256sum -c native.sha256; }) >/dev/null || fail "invalid $name snapshot"
-    done
-}
 case "$1" in
-snapshot)
-    selected || exit 0
-    # Run before One UI stops: copy signed application binaries only, never
-    # app/account data. A later prepare pass verifies and mounts the snapshot.
-    for guard in gatekeeper pdb apexd appid15000; do
-        grep '^#' "$STAGE/guards.txt" | grep -qw "$guard" || fail "missing $guard guard"
-    done
-    if awk '$2 >= 10000 && $2 <= 14999 {f=1} END {exit !f}' "$STAGE/data/system/packages.list" 2>/dev/null; then
-        # Keep an existing installation usable without enabling new Google
-        # binary mounts on its legacy app IDs. Its installed apps/data stay.
-        [ ! -L "$STAGE/fold8_google_mode" ] || fail 'Google mode is a symlink'
-        printf '%s\n' existing > "$STAGE/fold8_google_mode"
-        echo 'Fold8 ColorOS: preserving legacy app IDs; Google binary injection is disabled'
-        exit 0
-    fi
-    plain_tree "$STAGE/fold8_google"
-    [ ! -e "$STAGE/fold8_google" ] || [ -d "$STAGE/fold8_google" ] || fail 'Google cache is not a directory'
-    mkdir -p "$STAGE/fold8_google"
-    for spec in com.google.android.gms:GmsCore com.android.vending:Phonesky; do
-        pkg=${spec%:*}; name=${spec#*:}
-        dir="$STAGE/fold8_google/$name"; plain_tree "$dir"
-        new="$STAGE/fold8_google/.${name}-$$"
-        mkdir "$new" || fail 'snapshot temporary directory already exists'
-        pm path "$pkg" | sed -n 's/^package://p' > "$new/source.paths"
-        [ -s "$new/source.paths" ] || fail "$pkg is not installed in One UI"
-        mkdir -p "$new/lib/arm64"
-        while IFS= read -r source; do
-            case "$source" in /data/app/*/*.apk|/product/*/*.apk|/system/*/*.apk|/system_ext/*/*.apk) ;; *) fail 'unexpected APK path';; esac
-            [ -f "$source" ] && [ ! -L "$source" ] || fail 'APK missing or linked'
-            cp "$source" "$new/${source##*/}"
-        done < "$new/source.paths"
-        for apk in "$new"/*.apk; do
-            # BusyBox awk treats the doubled slash escapes as the end of the
-            # regex. Match path components instead, and check both commands:
-            # errors inside a for-loop substitution otherwise look like no libs.
-            "$BB" unzip -l "$apk" > "$new/archive.list" || fail 'cannot list APK'
-            entries=$("$BB" awk 'split($4, p, "/") == 3 && p[1] == "lib" && p[2] == "arm64-v8a" && p[3] ~ /^lib.*[.]so$/ {print $4}' "$new/archive.list") || fail 'cannot read APK library list'
-            for entry in $entries; do
-                lib=${entry##*/}
-                "$BB" unzip -p "$apk" "$entry" > "$new/lib/$lib" || fail 'cannot extract native library'
-                [ -s "$new/lib/$lib" ] || fail 'empty native library'
-                rm -f "$new/lib/arm64/$lib"
-                ln "$new/lib/$lib" "$new/lib/arm64/$lib"
-            done
-        done
-        rm -f "$new/archive.list"
-        # APKs without embedded arm64 libraries are valid too. Keep an explicit
-        # empty manifest instead of passing an unmatched glob to sha256sum.
-        (cd "$new" && sha256sum ./*.apk > apk.sha256 &&
-            : > native.sha256 &&
-            for f in lib/*.so lib/arm64/*.so; do
-                [ -f "$f" ] || continue
-                sha256sum "$f" >> native.sha256 || exit 1
-            done)
-        chown -R 0:0 "$new"; find "$new" -type d -exec chmod 755 {} \;
-        find "$new" -type f -exec chmod 644 {} \;
-        if [ -e "$dir" ]; then
-            mv "$dir" "$STAGE/fold8_google/.${name}-previous-$$"
-        fi
-        mv "$new" "$dir"
-        # Only our own immediately replaced binary snapshot; no guest data.
-        rm -rf "$STAGE/fold8_google/.${name}-previous-$$"
-    done
-    verify_google
-    [ ! -L "$STAGE/fold8_google_mode" ] || fail 'Google mode is a symlink'
-    printf '%s\n' snapshot > "$STAGE/fold8_google_mode"
-    ;;
 prepare)
     selected || exit 0
     ROOTFS="$STAGE/rootfs"
-    google_mode=$(cat "$STAGE/fold8_google_mode" 2>/dev/null || echo snapshot)
-    case "$google_mode" in snapshot) verify_google ;; existing) ;; *) fail 'unknown Google mode' ;; esac
     target="$ROOTFS/system/system_ext/priv-app/SystemUI/SystemUI.apk"
     "$BB" umount -l "$target" 2>/dev/null || true
     [ -f "$target" ] && [ ! -L "$target" ] || fail 'unexpected SystemUI path'
@@ -103,21 +29,6 @@ prepare)
     "$BB" mount --bind "$STAGE/Fold8SystemUI.apk" "$target"
     "$BB" mount --make-private "$target"
     "$BB" mount -o remount,bind,ro "$STAGE/Fold8SystemUI.apk" "$target"
-    if [ "$google_mode" = snapshot ]; then
-    for spec in GmsCore:GmsCore Phonesky:GooglePlayServicesUpdater; do
-        name=${spec%:*}; slot=${spec#*:}
-        target="$ROOTFS/my_product/priv-app/$slot"
-        [ -d "$target" ] && [ ! -L "$target" ] || fail "missing Google slot $slot"
-        if [ "$name" = GmsCore ] && [ -d "$target/m" ]; then
-            # Keep the image's own signed Dynamite module files.
-            cp -a "$target/m" "$STAGE/fold8_google/GmsCore/"
-        fi
-        chcon -R u:object_r:system_file:s0 "$STAGE/fold8_google/$name"
-        "$BB" mount --bind "$STAGE/fold8_google/$name" "$target"
-        "$BB" mount --make-private "$target"
-        "$BB" mount -o remount,bind,ro "$STAGE/fold8_google/$name" "$target"
-    done
-    fi
     dest="$STAGE/data/oneos_fold8"
     plain_tree "$dest"
     mkdir -p "$dest"
@@ -136,6 +47,13 @@ runtime)
     D=/data/oneos_fold8
     [ -f "$D/Fold8AngleRelay.dex" ] || exit 0
     reload=0
+    # Keep construction-time unfold consumers enabled as well as the patched
+    # ResourceUnfoldTransitionConfig accessors. These guest-only overlays also
+    # cover consumers which read the framework resources directly.
+    for spec in config_unfoldTransitionEnabled:OneOSColorHingeEnabled config_unfoldTransitionHingeAngle:OneOSColorHingeAngle; do
+        cmd overlay fabricate --target android --name "${spec#*:}" "android:bool/${spec%:*}" 0x12 1
+        cmd overlay enable --user 0 "com.android.shell:${spec#*:}"
+    done
     for spec in com.oplus.aod:Fold8Aod.apk com.oplus.pantanal.ums:Fold8UMS.apk com.nearme.instant.platform:Fold8Instant.apk; do
         pkg=${spec%:*}; apk="$D/${spec#*:}"
         if [ -z "$(pm path "$pkg" 2>/dev/null)" ]; then
@@ -177,6 +95,10 @@ runtime)
         chown 1000:"$uid" /data/oneos_hinge; chmod 2750 /data/oneos_hinge
         chcon u:object_r:system_data_file:s0 /data/oneos_hinge
         if ! ps -A -o ARGS | grep -q '[a]pp_process /system/bin OneOSAngleRelay '; then
+            # The data tree survives guest sessions. An old nonempty frame
+            # must not make the wait below restart SystemUI before this guest's
+            # producer has published its first readable sample.
+            rm -f /data/oneos_hinge/angle.bin
             z=$(pidof zygote64 | cut -d' ' -f1)
             (umask 027; CLASSPATH="$D/Fold8AngleRelay.dex" "$BB" nohup "$BB" setuidgid system /system/bin/app_process /system/bin OneOSAngleRelay /data/oneos_hinge/angle.bin "$z" >/data/local/tmp/oneos-angle.log 2>&1 </dev/null &)
             # Let the fresh relay frame exist before SystemUI reselects its provider.
@@ -190,5 +112,5 @@ runtime)
         done
     fi
     ;;
-*) fail 'expected snapshot, prepare or runtime' ;;
+*) fail 'expected prepare or runtime' ;;
 esac

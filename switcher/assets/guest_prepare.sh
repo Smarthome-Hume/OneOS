@@ -23,6 +23,17 @@ if awk -v p="$STAGE/data" '$5 == p || index($5, p "/") == 1' /proc/self/mountinf
     awk -v p="$STAGE/data" '$5 == p || index($5, p "/") == 1 {print "  " $5}' /proc/self/mountinfo
     exit 4
 fi
+# One UI's own partitions as mounted now (mount points), compared after the
+# setup below: nothing of the guest may land on them. In an image with
+# system/product as an absolute link to /product, binds made through the
+# rootfs's system/product in this (host) namespace went onto One UI's own
+# /product (Z Fold8 Ultra, 2026-10-25): its product_seapp_contexts and
+# split-permissions-google.xml were the guest's for the session, and the
+# in-place return found them and rebooted.
+host_part_mounts() {
+    awk '$5 ~ /^\/(system|system_ext|product|vendor|vendor_dlkm|odm|odm_dlkm|oem|prism|optics|my_[a-z_]+)(\/|$)/ {print $5}' /proc/self/mountinfo | sort
+}
+host_part_mounts > "$STAGE/host_part_mounts.before"
 # Nor may a host /data tree still be bridged from a session that never
 # returned: refuse, and let the return (reboot) clean up.
 [ -r "$STAGE/bridges.sh" ] || { echo "ERROR: $STAGE/bridges.sh missing"; exit 4; }
@@ -62,7 +73,7 @@ for s in data misc misc/adb misc/profiles misc/user misc/bluedroid misc/bluetoot
          misc_ce/0 misc_de/0 system system/devicestate system/package_cache \
          system/watchdog_timestamps system_de system_ce user/0 user_de/0 \
          oneos_bin oneos_bin/busybox zygote_exec oplus oplus/multimedia \
-         preapps-lib media/0 anr app local/tmp resource-cache oneos_fold8; do
+         preapps-lib media/0 anr app local/tmp resource-cache oneos_fold8 oneos_pixel_hinge oneos_hinge; do
     no_symlink "$s"
 done
 # The framework jars must be the ones built with the storage, installd and
@@ -134,9 +145,38 @@ rm -f "$STAGE/data/oneos_gms_present"
 rm -rf "$STAGE/data/system/package_cache" "$STAGE/data/system/watchdog_timestamps" 2>/dev/null
 
 echo "=== 1. Ensuring Watchdog Feeder is Active ==="
-if ! ps -ef | grep -v grep | grep -q "/dev/watchdog"; then
+# One UI's system_server opens /dev/watchdog (Samsung's softdog) unless
+# persist.vendor.softdog is off, sets 100 s and kicks it (services.jar
+# WatchdogSoftdog); stopped at [4b/6], it leaves the softdog running. The
+# Galaxy Z Flip7 (d5e743e6) and S26+ (80387c66), both Exynos, panicked
+# ("Software Watchdog Timer expired 100s") about 100 s after the guest's
+# system_server started. Each write is "V": a ping, and the magic close, so the
+# softdog stops on every close where the driver allows it, and stays stopped
+# if this loop ever ends. Every change between written and refused goes to
+# watchdog_feeder.log with the device's holders. A feeder of an older build
+# (echo -n 1) is replaced.
+pkill -f 'echo -n 1 > /dev/watchdog' 2>/dev/null
+if ! ps -ef | grep -v grep | grep -q "oneos_wdog_feeder.sh"; then
     echo "Starting watchdog feeder..."
-    nohup $BB sh -c "while true; do echo -n 1 > /dev/watchdog 2>/dev/null; sleep 2; done" </dev/null >/dev/null 2>&1 &
+    cat > "$STAGE/oneos_wdog_feeder.sh" <<'WDOG'
+L=/data/local/tmp/oneos/watchdog_feeder.log
+holders() {
+    for p in /proc/[0-9]*; do
+        ls -l "$p/fd" 2>/dev/null | grep -q '/dev/watchdog' && printf ' %s:%s' "${p#/proc/}" "$(cat "$p/comm" 2>/dev/null)"
+    done
+}
+was=''
+while true; do
+    if e=$(printf V 2>&1 > /dev/watchdog); then now=written; else now="refused ($e)"; fi
+    if [ "$now" != "$was" ]; then
+        echo "$(date +%T) /dev/watchdog $now; held by:$(holders)" >> "$L"
+        was=$now
+    fi
+    sleep 2
+done
+WDOG
+    chmod 700 "$STAGE/oneos_wdog_feeder.sh"
+    nohup $BB sh "$STAGE/oneos_wdog_feeder.sh" </dev/null >/dev/null 2>&1 &
 fi
 
 echo "=== 2. Creating Loop Device Nodes ==="
@@ -248,7 +288,18 @@ done
 # guest's tree does not have.
 GUEST_SYSTEM_EXT="$ROOTFS/system_ext"
 [ -L "$GUEST_SYSTEM_EXT" ] && GUEST_SYSTEM_EXT="$ROOTFS/system/system_ext"
-
+# product the same way, the other way round: ColorOS and Pixel images have
+# system/product and an absolute link /product -> /system/product; others
+# have /product and system/product -> /product, which in this namespace is One
+# UI's /product (see host_part_mounts at the top).
+GUEST_PRODUCT="$ROOTFS/system/product"
+[ -L "$GUEST_PRODUCT" ] && GUEST_PRODUCT="$ROOTFS/product"
+for d in "$GUEST_SYSTEM_EXT" "$GUEST_PRODUCT"; do
+    if [ -L "$d" ] || [ ! -d "$d" ]; then
+        echo "ERROR: ${d#$ROOTFS/} in the guest image is a link or missing (system_ext and product: one real folder each); not starting the guest"
+        exit 3
+    fi
+done
 # Signal bars in a guest without ColorOS's OplusSignalSmooth (run 43, Pixel):
 # Samsung's RIL sends the guest no signal strength indication and AOSP polls
 # only for opportunistic subscriptions, so both SIMs kept the all-invalid value
@@ -392,7 +443,7 @@ ddc_xml() {
 </displayConfiguration>
 DDCEOF
 }
-PETC="$ROOTFS/system/product/etc"
+PETC="$GUEST_PRODUCT/etc"
 if [ -e "$ROOTFS/system/framework/oplus-services.jar" ] || [ -L "$ROOTFS/system/framework/oplus-services.jar" ]; then
     :
 elif [ "${ONEOS_GUEST_DISPLAY_CONFIG:-1}" != 1 ]; then
@@ -504,10 +555,10 @@ fi
 # retried bindService 6 times a second for the whole session.
 # ONEOS_GUEST_IMS_EXT_BACKOFF=0 keeps ColorOS's jar.
 if [ "${ONEOS_GUEST_IMS_EXT_BACKOFF:-1}" = 1 ] && [ -f "$STAGE/ims-ext-common_patched.jar" ] \
-   && [ -f "$ROOTFS/system/product/framework/ims-ext-common.jar" ]; then
-    $BB umount -l "$ROOTFS/system/product/framework/ims-ext-common.jar" 2>/dev/null || true
-    $BB mount --bind "$STAGE/ims-ext-common_patched.jar" "$ROOTFS/system/product/framework/ims-ext-common.jar"
-    echo "Bound ims-ext-common_patched.jar -> $ROOTFS/system/product/framework/ims-ext-common.jar"
+   && [ -f "$GUEST_PRODUCT/framework/ims-ext-common.jar" ]; then
+    $BB umount -l "$GUEST_PRODUCT/framework/ims-ext-common.jar" 2>/dev/null || true
+    $BB mount --bind "$STAGE/ims-ext-common_patched.jar" "$GUEST_PRODUCT/framework/ims-ext-common.jar"
+    echo "Bound ims-ext-common_patched.jar -> $GUEST_PRODUCT/framework/ims-ext-common.jar"
 fi
 
 # Signal bars: OplusSignalSmooth polls GET_SIGNAL_STRENGTH every 20 s with the
@@ -521,9 +572,18 @@ if [ "${ONEOS_GUEST_SIGNAL_POLL:-1}" = 1 ] && [ -f "$STAGE/oplus-telephony-commo
     $BB mount --bind "$STAGE/oplus-telephony-common_patched.jar" "$GUEST_OTC"
     echo "Bound oplus-telephony-common_patched.jar -> $GUEST_OTC"
 fi
-# Apply only the Fold8/Find N6 set. Does nothing for all other profiles/images.
+# Play services and the Play Store from One UI's copy (oneos_switch.sh took it
+# before One UI stopped), bound over the image's my_product slots, for every
+# ColorOS set (switcher/assets/guest_google.sh). Never stops the start: without
+# a checked copy the guest starts without it.
+STAGE="$STAGE" BB="$BB" /system/bin/sh "$STAGE/guest_google.sh" prepare ||
+    echo "!!! guest_google.sh prepare failed; the guest starts without One UI's Play services"
+# Galaxy Z Fold8 with the Find N6 set (n6-f8): its SystemUI and guest fixes
+# (switcher/assets/fold8_coloros.sh). Does nothing for any other profile or set.
+# After the system_ext overlay above: a bind made under system_ext before it is
+# hidden by it (0.4.14 on the Z Fold8: SystemUI kept the image's, no fold layout).
 STAGE="$STAGE" BB="$BB" /system/bin/sh "$STAGE/fold8_coloros.sh" prepare || exit 3
-
+STAGE="$STAGE" BB="$BB" /system/bin/sh "$STAGE/fold8_pixel.sh" prepare || exit 3
 # ColorOS feature switches the guest needs, added to com.oplus.features_config.xml
 # in its system_ext, a feature file it already loads (the my_* feature files are
 # only read with CUST_LEVEL_LIST, which OPPO's init sets):
@@ -589,6 +649,8 @@ FORM="${ONEOS_GUEST_FORM:-fold}"
 case "$FORM" in fold|tablet|phone) ;; *) echo "WARNING: ONEOS_GUEST_FORM=$FORM unknown, using fold"; FORM=fold ;; esac
 if [ -f "$FEAT" ]; then
     ADDED="oplus.software.display.multibits_dimming_support"
+    # Galaxy Z Fold8, Find N6 (pull request #1): Live Alerts, AOD, fold animations,
+    # separate wallpapers per panel and haptic sounds, as the Find N6 declares them.
     if [ "${ONEOS_PROFILE:-}" = f8 ] &&
        grep -q '^  "image": "coloros17-findn6",$' "$STAGE/.oneos_stage"; then
         ADDED="$ADDED oplus.software.support_fluid_entry oplus.software.fluid_replace_ntf"
@@ -675,191 +737,13 @@ if [ -f "$GUEST_SYSTEM_EXT/priv-app/SystemUIGoogle/SystemUIGoogle.apk" ] && [ -f
         echo "Pixel status bar overlay left out (ONEOS_GUEST_STATUSBAR_PADDING=0)"
     fi
 fi
-if [ $INJ = 1 ]; then
-    mkdir -p "$STAGE/oem/overlay" &&
-        cp "$STAGE/OneOSPhoneInjection.apk" "$STAGE/oem/overlay/" &&
-        chmod 755 "$STAGE/oem" "$STAGE/oem/overlay" && chmod 644 "$STAGE/oem/overlay/OneOSPhoneInjection.apk" &&
-        OEM_FILES="$OEM_FILES overlay/OneOSPhoneInjection.apk" &&
-        echo "Signal poll: TelephonyComponentFactory injection (oneos-telephony.jar), GET_SIGNAL_STRENGTH every 20 s with the screen on"
-fi
-if [ "${ONEOS_GUEST_APP:-1}" = 1 ]; then
-    if [ -f "$STAGE/OneOSGuest.apk" ]; then
-        mkdir -p "$STAGE/oem/app/OneOSGuest" &&
-            cp "$STAGE/OneOSGuest.apk" "$STAGE/oem/app/OneOSGuest/" &&
-            chmod 755 "$STAGE/oem" "$STAGE/oem/app" "$STAGE/oem/app/OneOSGuest" &&
-            chmod 644 "$STAGE/oem/app/OneOSGuest/OneOSGuest.apk" &&
-            OEM_FILES="$OEM_FILES app/OneOSGuest/OneOSGuest.apk"
-    else
-        echo "No $STAGE/OneOSGuest.apk: no OneOS app in the guest (Volume Up + Volume Down still return)"
-    fi
-fi
-# BEGIN GENERATED PIXEL FOLD8 CONFIG
-# Generated by scripts/make-pixel-fold8-overlays.py from switcher/overlays/pixel_fold8_*.
-# Immutable boot resources let system_server see AOD and retain bar geometry.
-# Native clock/icon dimensions and the user AOD setting are not overridden.
-if [ "${ONEOS_PROFILE:-}" = f8 ] && [ -f "$GUEST_SYSTEM_EXT/priv-app/SystemUIGoogle/SystemUIGoogle.apk" ] && [ ! -f "$ROOTFS/system/framework/oplus-services.jar" ]; then
-    mkdir -p "$STAGE/oem/overlay"
-    "$BB" base64 -d <<'ONEOS_PIXEL_FOLD8_FRAMEWORK' | "$BB" gzip -d > "$STAGE/oem/overlay/OneOSPixelFold8Framework.apk"
-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
-5v4J2HpcqlohAAA=
-ONEOS_PIXEL_FOLD8_FRAMEWORK
-    [ "$(sha256sum "$STAGE/oem/overlay/OneOSPixelFold8Framework.apk" | cut -d ' ' -f 1)" = "6e5d6d2774b69a0dd09803205badc6ce1d946060f6d062f4bdbc8d469489b76d" ] || { echo "ERROR: Pixel Fold8 overlay checksum"; exit 3; }
-    chmod 644 "$STAGE/oem/overlay/OneOSPixelFold8Framework.apk"
-    OEM_FILES="$OEM_FILES overlay/OneOSPixelFold8Framework.apk"
-    "$BB" base64 -d <<'ONEOS_PIXEL_FOLD8_SYSTEMUI' | "$BB" gzip -d > "$STAGE/oem/overlay/OneOSPixelFold8Systemui.apk"
-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
-sw0+UurfAF78KL5aIQAA
-ONEOS_PIXEL_FOLD8_SYSTEMUI
-    [ "$(sha256sum "$STAGE/oem/overlay/OneOSPixelFold8Systemui.apk" | cut -d ' ' -f 1)" = "c3e64d85a9ea9b8d9d41fc00c4e0a3b21495da18aa43ddd64f4bb089c056756f" ] || { echo "ERROR: Pixel Fold8 overlay checksum"; exit 3; }
-    chmod 644 "$STAGE/oem/overlay/OneOSPixelFold8Systemui.apk"
-    OEM_FILES="$OEM_FILES overlay/OneOSPixelFold8Systemui.apk"
-    echo "Pixel Fold8: immutable AOD and status-bar configuration staged"
-fi
-# END GENERATED PIXEL FOLD8 CONFIG
 # Pixel 17's WallpaperDataParser calls next() once for <description>. Its
 # indented serializer writes whitespace there, so next() returns TEXT and the
 # saved component is skipped. Remove only whitespace between XML elements,
 # preserving every component, crop, colour, content value and wallpaper file.
 if [ "${ONEOS_PROFILE:-}" = f8 ] && [ -f "$GUEST_SYSTEM_EXT/priv-app/SystemUIGoogle/SystemUIGoogle.apk" ]; then
     WREL=system/users/0/wallpaper_info.xml
+    no_symlink "$WREL"
     WFILE="$STAGE/data/$WREL"
     if [ -f "$WFILE" ] && [ ! -L "$WFILE" ] && [ "$(head -c 5 "$WFILE")" = '<?xml' ]; then
         no_symlink "$WREL.oneos-normalized"
@@ -893,6 +777,39 @@ if [ -n "$OEM_FILES" ]; then
     $BB mount --bind "$STAGE/oem" "$ROOTFS/oem" &&
         echo "Bound guest /oem -> $ROOTFS/oem:$OEM_FILES"
 fi
+
+# Pixel Fold8: framework boot flags are visible to SystemUI and the launcher.
+if [ "${ONEOS_PROFILE:-}" = f8 ] && grep -q '^  "set": "pixel-f8",$' "$STAGE/.oneos_stage"; then
+    mkdir -p "$STAGE/oem/overlay"
+    cp "$STAGE/Fold8PixelUnfold.apk" "$STAGE/oem/overlay/"
+    chmod 755 "$STAGE/oem" "$STAGE/oem/overlay"
+    chmod 644 "$STAGE/oem/overlay/Fold8PixelUnfold.apk"
+    OEM_FILES="$OEM_FILES overlay/Fold8PixelUnfold.apk"
+fi
+if [ $INJ = 1 ]; then
+    mkdir -p "$STAGE/oem/overlay" &&
+        cp "$STAGE/OneOSPhoneInjection.apk" "$STAGE/oem/overlay/" &&
+        chmod 755 "$STAGE/oem" "$STAGE/oem/overlay" && chmod 644 "$STAGE/oem/overlay/OneOSPhoneInjection.apk" &&
+        OEM_FILES="$OEM_FILES overlay/OneOSPhoneInjection.apk" &&
+        echo "Signal poll: TelephonyComponentFactory injection (oneos-telephony.jar), GET_SIGNAL_STRENGTH every 20 s with the screen on"
+fi
+if [ "${ONEOS_GUEST_APP:-1}" = 1 ]; then
+    if [ -f "$STAGE/OneOSGuest.apk" ]; then
+        mkdir -p "$STAGE/oem/app/OneOSGuest" &&
+            cp "$STAGE/OneOSGuest.apk" "$STAGE/oem/app/OneOSGuest/" &&
+            chmod 755 "$STAGE/oem" "$STAGE/oem/app" "$STAGE/oem/app/OneOSGuest" &&
+            chmod 644 "$STAGE/oem/app/OneOSGuest/OneOSGuest.apk" &&
+            OEM_FILES="$OEM_FILES app/OneOSGuest/OneOSGuest.apk"
+    else
+        echo "No $STAGE/OneOSGuest.apk: no OneOS app in the guest (Volume Up + Volume Down still return)"
+    fi
+fi
+if [ -n "$OEM_FILES" ]; then
+    # A stage copy, not a bind of host data: safe to label like a system file.
+    $BB chcon -h -R u:object_r:system_file:s0 "$STAGE/oem" 2>/dev/null || true
+    $BB mount --bind "$STAGE/oem" "$ROOTFS/oem" &&
+        echo "Bound guest /oem -> $ROOTFS/oem:$OEM_FILES"
+fi
 # ColorOS apps whose SELinux domain the host policy does not have (run 31: 35
 # zygote aborts in 6 minutes, crash/system/dropbox). The guest's system_ext and
 # product seapp_contexts give OPPO apps their own domains
@@ -912,7 +829,7 @@ fi
 # parseable; plat_seapp_contexts (system_server's rule, same AOSP build as the
 # host) is left alone. The host's types come from its CIL files, so this
 # follows whatever policy the phone has. ONEOS_GUEST_SEAPP=0 keeps ColorOS's files.
-SEAPP_FILES="$GUEST_SYSTEM_EXT/etc/selinux/system_ext_seapp_contexts $ROOTFS/system/product/etc/selinux/product_seapp_contexts"
+SEAPP_FILES="$GUEST_SYSTEM_EXT/etc/selinux/system_ext_seapp_contexts $GUEST_PRODUCT/etc/selinux/product_seapp_contexts"
 for f in $SEAPP_FILES; do $BB umount -l "$f" 2>/dev/null; done
 if [ "${ONEOS_GUEST_SEAPP:-1}" = 1 ]; then
     HOST_TYPES="$STAGE/host_sepolicy_types.txt"
@@ -1486,7 +1403,63 @@ chmod 0771 "$STAGE/data/preapps-lib" 2>/dev/null || true
 # the cover instead of sleeping (ColorOS itself only sleeps on fold with
 # continue_using_apps_when_folded=2). vendor (default for now) = run 30.
 DSDIR="$STAGE/data/system/devicestate"
-if [ "${ONEOS_GUEST_DEVICE_STATES:-vendor}" = oneos ]; then
+DS_DEFAULT=vendor
+FOLD8_COLOR_HINGE=0
+if [ "${ONEOS_PROFILE:-}" = f8 ] && grep -q '^  "set": "n6-f8",$' "$STAGE/.oneos_stage" && grep -q '^  "image": "coloros17-findn6",$' "$STAGE/.oneos_stage"; then
+    DS_DEFAULT=fold8-hinge
+    FOLD8_COLOR_HINGE=1
+fi
+if [ "$FOLD8_COLOR_HINGE" = 1 ] && [ "${ONEOS_GUEST_DEVICE_STATES:-$DS_DEFAULT}" = fold8-hinge ]; then
+    mkdir -p "$DSDIR"
+    cat > "$DSDIR/device_state_configuration.xml" <<'F8DSX'
+<?xml version="1.0" encoding="utf-8"?>
+<!-- OneOS Fold8 ColorOS hinge prototype. Lid switch owns closed/open panels. -->
+<device-state-config>
+    <device-state>
+        <identifier>0</identifier><name>CLOSE</name>
+        <properties>
+            <property>com.android.server.policy.PROPERTY_FOLDABLE_HARDWARE_CONFIGURATION_FOLD_IN_CLOSED</property>
+            <property>com.android.server.policy.PROPERTY_FOLDABLE_DISPLAY_CONFIGURATION_OUTER_PRIMARY</property>
+        </properties>
+        <conditions><lid-switch><open>false</open></lid-switch></conditions>
+    </device-state>
+    <device-state>
+        <identifier>1</identifier><name>TENT</name>
+        <properties>
+            <property>com.android.server.policy.PROPERTY_FOLDABLE_HARDWARE_CONFIGURATION_FOLD_IN_CLOSED</property>
+            <property>com.android.server.policy.PROPERTY_FOLDABLE_DISPLAY_CONFIGURATION_OUTER_PRIMARY</property>
+        </properties>
+        <conditions><lid-switch><open>false</open></lid-switch></conditions>
+    </device-state>
+    <device-state>
+        <identifier>2</identifier><name>HALF_OPENED</name>
+        <properties>
+            <property>com.android.server.policy.PROPERTY_FOLDABLE_HARDWARE_CONFIGURATION_FOLD_IN_HALF_OPEN</property>
+            <property>com.android.server.policy.PROPERTY_FOLDABLE_DISPLAY_CONFIGURATION_INNER_PRIMARY</property>
+        </properties>
+        <conditions>
+            <lid-switch><open>true</open></lid-switch>
+            <sensor>
+                <type>com.samsung.sensor.folding_angle</type>
+                <name>Folding Angle  Non-wakeup</name>
+                <value><min-inclusive>15</min-inclusive><max-inclusive>165</max-inclusive></value>
+            </sensor>
+        </conditions>
+    </device-state>
+    <device-state>
+        <identifier>3</identifier><name>OPEN</name>
+        <properties>
+            <property>com.android.server.policy.PROPERTY_FOLDABLE_HARDWARE_CONFIGURATION_FOLD_IN_OPEN</property>
+            <property>com.android.server.policy.PROPERTY_FOLDABLE_DISPLAY_CONFIGURATION_INNER_PRIMARY</property>
+        </properties>
+        <conditions><lid-switch><open>true</open></lid-switch></conditions>
+    </device-state>
+</device-state-config>
+F8DSX
+    chown 1000:1000 "$DSDIR" "$DSDIR/device_state_configuration.xml"
+    chmod 644 "$DSDIR/device_state_configuration.xml"
+    echo "Guest device states: Fold8 continuous hinge (0 closed, 2 half-open 15..165 degrees, 3 open)"
+elif [ "${ONEOS_GUEST_DEVICE_STATES:-$DS_DEFAULT}" = oneos ]; then
     mkdir -p "$DSDIR"
     cat > "$DSDIR/device_state_configuration.xml" <<'DSX'
 <?xml version="1.0" encoding="utf-8"?>
@@ -2481,6 +2454,19 @@ for m in com.android.nfcservices com.android.bt; do
     done
 done
 
+# Play services from One UI's copy in my_product (guest_google.sh prepare wrote
+# google_apps/active): hide One UI's own GmsCore in the gmssystem APEX bind, so
+# the guest's package manager finds Play services once, where the image's
+# privapp-permissions-google-product.xml grants it. Private first, as above.
+if [ -f "$STAGE/google_apps/active" ]; then
+    for d in "$ROOTFS/apex/com.google.android.gmssystem" "$ROOTFS/apex/com.google.android.gmssystem"@*; do
+        [ -d "$d/priv-app" ] || continue
+        $BB mount --make-private "$d" 2>/dev/null || { echo "!!! could not make $d private, leaving it alone"; continue; }
+        $BB mount -t tmpfs -o ro,size=4k,mode=755 tmpfs "$d/priv-app" &&
+            echo "Hid host com.google.android.gmssystem/priv-app in $(basename "$d") (Play services from One UI's copy in my_product)"
+    done
+fi
+
 # The android.uid.networkstack group has to come from one signer. With the
 # host's tethering (Google-signed) and cellbroadcast APEXes kept, use the
 # host's NetworkStackGoogle and CaptivePortalLoginGoogle in place of ColorOS's
@@ -2566,7 +2552,7 @@ if [ "$GMS_WANT" = 1 ]; then
         exit 3
     }
     GMS_APEX="$ROOTFS/apex/com.google.android.gmssystem"
-    GMS_DIR="$ROOTFS/system/product/priv-app/PrebuiltGmsCore"
+    GMS_DIR="$GUEST_PRODUCT/priv-app/PrebuiltGmsCore"
     GMS_PKG="$STAGE/gmscore"
     # 1. The payload is the guest's: its loop device (payload_loops, written by
     #    mount_payload), backed by the staged payload, on top at the APEX path.
@@ -2672,8 +2658,8 @@ if [ "${ONEOS_GUEST_HIDE_GMS:-0}" = 1 ]; then
     hid=0
     for a in GmsCore PrebuiltGmsCore Phonesky GooglePartnerSetup PartnerSetupPrebuilt 'GoogleRestore*' \
              ConfigUpdater 'PlayAutoInstallConfig*' GoogleServicesFramework; do
-        for d in "$ROOTFS/my_product/priv-app/"$a "$ROOTFS/system/priv-app/"$a "$ROOTFS/system/product/priv-app/"$a \
-                 "$ROOTFS/system/product/app/"$a "$GUEST_SYSTEM_EXT/priv-app/"$a; do
+        for d in "$ROOTFS/my_product/priv-app/"$a "$ROOTFS/system/priv-app/"$a "$GUEST_PRODUCT/priv-app/"$a \
+                 "$GUEST_PRODUCT/app/"$a "$GUEST_SYSTEM_EXT/priv-app/"$a; do
             [ -d "$d" ] && [ ! -L "$d" ] || continue
             $BB mount -t tmpfs -o ro,size=4k,mode=755 tmpfs "$d" && { echo "Hid guest ${d#$ROOTFS/} (ONEOS_GUEST_HIDE_GMS=1)"; hid=$((hid + 1)); }
         done
@@ -2690,8 +2676,11 @@ fi
 # Pixel's GmsCore APK is in a product APEX the phone's apexd never activates,
 # and ONEOS_GUEST_HIDE_GMS hides the others. So when the guest has no GmsCore
 # APK, each such file is bound from a stage copy without the gms splits; the
-# image is unchanged. Stale binds of a former session come off first.
-SPLIT_DIRS="$ROOTFS/system/etc/permissions $ROOTFS/system/product/etc/permissions $GUEST_SYSTEM_EXT/etc/permissions $ROOTFS/my_product/etc/permissions"
+# image is unchanged. Stale binds of a former session come off first: only this
+# filter's own (oneos_split_*.xml). Up to 0.4.14 every bind on a permissions
+# XML came off here, the ColorOS feature list bound above (FEAT) with them, so
+# none of its additions reached a session (pull request #1, Z Fold8).
+SPLIT_DIRS="$ROOTFS/system/etc/permissions $GUEST_PRODUCT/etc/permissions $GUEST_SYSTEM_EXT/etc/permissions $ROOTFS/my_product/etc/permissions"
 for d in $SPLIT_DIRS; do
     for f in "$d"/*.xml; do
         [ -f "$f" ] || continue
@@ -2790,5 +2779,16 @@ fi
 # resources, system_server boot loop, reboot). A private bind does not change
 # the source mount.
 $BB mount --make-rprivate "$ROOTFS" 2>/dev/null || true
+
+# Nothing of the guest on One UI's own partitions (host_part_mounts, top).
+host_part_mounts > "$STAGE/host_part_mounts.after"
+LEAKED=$(awk 'NR == FNR { b[$0] = 1; next } !($0 in b)' "$STAGE/host_part_mounts.before" "$STAGE/host_part_mounts.after")
+if [ -n "$LEAKED" ]; then
+    echo "ERROR: the setup mounted over One UI's own partitions:" $LEAKED
+    for m in $(echo "$LEAKED" | sort -r); do $BB umount -l "$m" 2>/dev/null && echo "  unmounted $m"; done
+    echo "Not starting the guest"
+    exit 3
+fi
+echo "One UI's partitions: no mount added by the setup"
 
 echo "=== ALL MOUNTS PREPARED SUCCESSFULLY ==="

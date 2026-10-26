@@ -424,3 +424,43 @@
 +    :missing
 +    return v1
 +.end method
+--- a/smali_classes7/com/android/systemui/unfold/FullscreenLightRevealAnimationController.smali
++++ b/smali_classes7/com/android/systemui/unfold/FullscreenLightRevealAnimationController.smali
+@@ -292,6 +292,10 @@
+ 
+     iget-object v1, p0, Lcom/android/systemui/unfold/FullscreenLightRevealAnimationController;->internalDisplayInfos:Ljava/util/List;
+ 
++    iget-object v2, p0, Lcom/android/systemui/unfold/FullscreenLightRevealAnimationController;->displayManager:Landroid/hardware/display/DisplayManager;
++    invoke-static {v2, v1}, Lcom/android/systemui/unfold/Fold8RevealGeometry;->refresh(Landroid/hardware/display/DisplayManager;Ljava/util/List;)Ljava/util/List;
++    move-result-object v1
++
+     invoke-interface {v0, v1}, Lkotlin/jvm/functions/Function1;->invoke(Ljava/lang/Object;)Ljava/lang/Object;
+ 
+     move-result-object v0
+@@ -382,6 +386,8 @@
+ 
+     iput-object p0, v1, Landroid/view/WindowManager$LayoutParams;->packageName:Ljava/lang/String;
+ 
++    invoke-static {v1}, Lcom/android/systemui/unfold/Fold8RevealGeometry;->bounds(Landroid/view/WindowManager$LayoutParams;)V
++
+     return-object v1
+ 
+     :cond_2
+--- a/smali_classes7/com/android/systemui/unfold/UnfoldLightRevealOverlayAnimation.smali
++++ b/smali_classes7/com/android/systemui/unfold/UnfoldLightRevealOverlayAnimation.smali
+@@ -253,13 +253,8 @@
+     return v0
+ 
+     :cond_2
+-    sget-object v1, Lcom/android/systemui/unfold/UnfoldLightRevealOverlayAnimation$AddOverlayReason;->FOLD:Lcom/android/systemui/unfold/UnfoldLightRevealOverlayAnimation$AddOverlayReason;
+-
+-    if-ne p0, v1, :cond_3
+-
+-    return v0
+-
+-    :cond_3
++    # The Fold8 can report continuous closing progress. Keep the stock
++    # initial FOLD=1 / UNFOLD=0 values, then follow the supplied progress.
+     invoke-virtual {p1}, Ljava/lang/Float;->floatValue()F
+ 
+     move-result p0

@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / 'switcher/assets/fold8_coloros.sh'
@@ -29,46 +30,65 @@ class Fold8Tests(unittest.TestCase):
             for profile, image, fileset in [('f8u', 'coloros17-findn6', 'n6-f8u'), ('f8', 'pixel11fold-yogi', 'pixel-f8u'), ('f8', 'coloros17-findn6', 'n6-f8u')]:
                 marker = json.dumps(dict(image=image, set=fileset, created=0), indent=2) + '\n'
                 (stage / '.oneos_stage').write_text(marker)
-                for mode in ['snapshot', 'prepare']:
+                for mode in ['prepare']:
                     env = dict(os.environ, STAGE=tmp, ONEOS_PROFILE=profile, BB='/does/not/exist')
                     r = subprocess.run(['/bin/sh', str(SCRIPT), mode], env=env, capture_output=True)
                     self.assertEqual(0, r.returncode, r.stderr)
                 self.assertEqual({'.oneos_stage'}, {p.name for p in stage.iterdir()})
 
-    def test_selected_profile_refuses_unverified_google_before_mounts(self):
+    def test_selected_profile_refuses_unexpected_systemui_before_mounts(self):
         with tempfile.TemporaryDirectory() as tmp:
             stage = Path(tmp)
             (stage / '.oneos_stage').write_text(json.dumps(dict(image='coloros17-findn6', set='n6-f8', created=0), indent=2) + '\n')
             env = dict(os.environ, STAGE=tmp, ONEOS_PROFILE='f8', BB='/does/not/exist')
             r = subprocess.run(['/bin/sh', str(SCRIPT), 'prepare'], env=env, capture_output=True)
             self.assertNotEqual(0, r.returncode)
-            self.assertIn(b'invalid GmsCore snapshot', r.stderr)
+            self.assertIn(b'unexpected SystemUI path', r.stderr)
             self.assertFalse((stage / 'data').exists())
 
-    def test_snapshot_refuses_missing_safety_guards(self):
+    def test_hinge_state_config_scope_and_explicit_opt_out(self):
+        prepare = (ROOT / 'switcher/assets/guest_prepare.sh').read_text()
+        block = prepare.split('DSDIR="$STAGE/data/system/devicestate"', 1)[1].split('# SELinux labels matter', 1)[0]
         with tempfile.TemporaryDirectory() as tmp:
             stage = Path(tmp)
-            (stage / '.oneos_stage').write_text(json.dumps(dict(image='coloros17-findn6', set='n6-f8', created=0), indent=2) + '\n')
-            (stage / 'guards.txt').write_text('# older storage guards only\n')
-            env = dict(os.environ, STAGE=tmp, ONEOS_PROFILE='f8', BB='/does/not/exist')
-            r = subprocess.run(['/bin/sh', str(SCRIPT), 'snapshot'], env=env, capture_output=True)
-            self.assertNotEqual(0, r.returncode)
-            self.assertIn(b'missing gatekeeper guard', r.stderr)
-            self.assertFalse((stage / 'fold8_google').exists())
+            tools = stage / 'tools'; tools.mkdir()
+            (tools / 'chown').write_text('#!/bin/sh\nexit 0\n')
+            (tools / 'chown').chmod(0o755)
+            cases = [
+                ('f8', 'coloros17-findn6', 'n6-f8', '', [0, 1, 2, 3]),
+                ('f8u', 'coloros17-findn6', 'n6-f8u', '', []),
+                ('f8', 'pixel11fold-yogi', 'pixel-f8', '', []),
+                ('f8', 'coloros17-findn6', 'n6-f8', 'vendor', []),
+                ('f8', 'coloros17-findn6', 'n6-f8', 'oneos', [0, 3]),
+            ]
+            for profile, image, fileset, mode, ids in cases:
+                (stage / '.oneos_stage').write_text(json.dumps(dict(image=image, set=fileset, created=0), indent=2) + '\n')
+                dest = stage / 'data/system/devicestate'
+                env = dict(os.environ, STAGE=tmp, DSDIR=str(dest), ONEOS_PROFILE=profile,
+                           PATH=str(tools) + ':' + os.environ['PATH'])
+                env.pop('ONEOS_GUEST_DEVICE_STATES', None)
+                if mode:
+                    env['ONEOS_GUEST_DEVICE_STATES'] = mode
+                subprocess.run(['/bin/sh', '-ec', block], env=env, check=True, capture_output=True)
+                config = dest / 'device_state_configuration.xml'
+                if not ids:
+                    self.assertFalse(config.exists())
+                    continue
+                states = ET.parse(config).getroot().findall('device-state')
+                self.assertEqual(ids, [int(x.findtext('identifier')) for x in states])
+                if len(ids) == 4:
+                    half = states[2]
+                    sensor = half.find('conditions/sensor')
+                    self.assertEqual('true', half.findtext('conditions/lid-switch/open'))
+                    self.assertEqual('com.samsung.sensor.folding_angle', sensor.findtext('type'))
+                    self.assertEqual('Folding Angle  Non-wakeup', sensor.findtext('name'))
+                    self.assertEqual('15', sensor.findtext('value/min-inclusive'))
+                    self.assertEqual('165', sensor.findtext('value/max-inclusive'))
 
-    def test_legacy_data_skips_google_injection_without_losing_ui_repairs(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            stage = Path(tmp)
-            (stage / '.oneos_stage').write_text(json.dumps(dict(image='coloros17-findn6', set='n6-f8', created=0), indent=2) + '\n')
-            (stage / 'guards.txt').write_text('# gatekeeper pdb apexd appid15000\n')
-            (stage / 'data/system').mkdir(parents=True)
-            (stage / 'data/system/packages.list').write_text('old.app 10001 0 /data/user/0/old.app default none\n')
-            env = dict(os.environ, STAGE=tmp, ONEOS_PROFILE='f8', BB='/does/not/exist')
-            r = subprocess.run(['/bin/sh', str(SCRIPT), 'snapshot'], env=env, capture_output=True)
-            self.assertEqual(0, r.returncode, r.stderr)
-            self.assertEqual('existing\n', (stage / 'fold8_google_mode').read_text())
-            self.assertFalse((stage / 'fold8_google').exists())
-            self.assertTrue((stage / 'data/system/packages.list').exists())
+    def test_google_is_no_longer_fold8_only(self):
+        # Play services and the Play Store: guest_google.sh, every ColorOS set.
+        self.assertNotIn('snapshot)', SCRIPT.read_text())
+        self.assertNotIn('GmsCore', SCRIPT.read_text())
 
     def test_exact_patch_and_atomic_refusal(self):
         if not ORIGINAL:

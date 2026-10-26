@@ -33,7 +33,7 @@ def run(*args):
     subprocess.run([str(a) for a in args], check=True)
 
 
-def repack(original, rebuilt, output, zipalign):
+def repack(original, rebuilt, output, zipalign, geometry_dex):
     """Replace only touched dex entries; leave OEM resources and signer identity.
 
     The retained signer block supplies system-partition certificate metadata;
@@ -63,6 +63,9 @@ def repack(original, rebuilt, output, zipalign):
             dst.fp.write(header + body + desc)
             dst.filelist.append(entry); dst.NameToInfo[entry.filename] = entry
             dst.start_dir = dst.fp.tell(); dst._didModify = True
+        assert 'classes10.dex' not in src.namelist()
+        entry = zipfile.ZipInfo('classes10.dex', src.getinfo('classes7.dex').date_time)
+        dst.writestr(entry, geometry_dex.read_bytes(), compress_type=zipfile.ZIP_STORED)
     run(zipalign, '-f', '-P', '16', '4', rawzip, aligned)
     rawzip.unlink()
     a = original.read_bytes()
@@ -80,12 +83,31 @@ def repack(original, rebuilt, output, zipalign):
     struct.pack_into('<I', result, e + len(block) + 16, cd + len(block))
     output.write_bytes(result)
     with zipfile.ZipFile(original) as src, zipfile.ZipFile(output) as dst:
-        assert src.namelist() == dst.namelist()
+        assert src.namelist() + ['classes10.dex'] == dst.namelist()
         assert dst.testzip() is None
         for n in src.namelist():
             if n not in dex:
                 assert src.read(n) == dst.read(n), n
 
+
+GUARDS = ('storage', 'installd', 'power', 'sysrq', 'weaver', 'biometric', 'gatekeeper', 'pdb', 'apexd', 'appid15000', 'nousers')
+
+
+def check_guards(out):
+    """The base set (OneOS's own N6 set, r50 and later) already carries every guard.
+
+    Ported from PR #1: its 0.4.7 base needed six patchers applied again; ours has
+    them since the 2026-10-25 rebuild, so they are checked, not re-applied.
+    """
+    header = (out / 'guards.txt').read_text().splitlines()[0]
+    missing = [g for g in GUARDS if g not in header]
+    if missing:
+        raise ValueError(f'base set lacks guards: {missing}')
+    for line in (out / 'guards.txt').read_text().splitlines():
+        if line and not line.startswith('#'):
+            pin, name = line.split()
+            if sha(out / name) != pin:
+                raise ValueError(f'{name} is not the jar guards.txt vouches for')
 
 
 def main():
@@ -94,6 +116,8 @@ def main():
     p.add_argument('--systemui', type=Path, required=True)
     p.add_argument('--donor', type=Path, required=True)
     p.add_argument('--out', type=Path, default=ROOT / 'out/overlays_n6_fold8')
+    p.add_argument('--write-pins', action='store_true',
+                   help='write app-android/packages/n6-f8.sha256 from this build (an explicit, reviewed pin update)')
     a = p.parse_args()
     if sha(a.systemui) != ORIGINAL_UI:
         p.error('SystemUI is not the supported Find N6 build')
@@ -120,9 +144,13 @@ def main():
             if sha(source) != pin:
                 p.error(f'{source} differs from the existing N6 set')
             shutil.copyfile(source, out / name)
-        # The pinned 0.4.13 baseline already carries all guest safety guards.
-        # Preserve its jars and guest vold binaries exactly.
-        run('python3', '-I', ROOT / 'scripts/check-dex.py', out / 'services_patched.jar')
+        check_guards(out)
+        geometry_classes = w / 'geometry-classes'; geometry_classes.mkdir()
+        geometry_dex = w / 'geometry-dex'; geometry_dex.mkdir()
+        run('javac', '--release', '8', '-classpath', android, '-d', geometry_classes,
+            ROOT / 'switcher/patches/fold8-coloros/Fold8RevealGeometry.java')
+        run(bt / 'd8', '--min-api', '31', '--lib', android, '--output', geometry_dex,
+            *sorted(geometry_classes.rglob('*.class')))
         # Decode only the dex entries we replace. On macOS the complete
         # 73k-class tree consumes over a GiB; other dex entries are copied
         # directly from the original APK by repack(), never rebuilt.
@@ -140,7 +168,7 @@ def main():
         rebuilt = w / 'rebuilt.apk'
         apk('b', '-q', '-o', rebuilt, decoded)
         shutil.rmtree(decoded)
-        repack(a.systemui, rebuilt, out / 'Fold8SystemUI.apk', bt / 'zipalign')
+        repack(a.systemui, rebuilt, out / 'Fold8SystemUI.apk', bt / 'zipalign', geometry_dex / 'classes.dex')
         rebuilt.unlink()
         run('python3', '-I', ROOT / 'scripts/check-dex.py', out / 'Fold8SystemUI.apk')
         classes = w / 'classes'; classes.mkdir()
@@ -151,11 +179,24 @@ def main():
         shutil.copyfile(dexdir / 'classes.dex', out / 'Fold8AngleRelay.dex')
         for name, (dest, _) in DONORS.items():
             shutil.copyfile(a.donor / name, out / dest)
-        expected = (ROOT / 'app-android/packages/n6-f8.sha256').read_text()
+        pins = ROOT / 'app-android/packages/n6-f8.sha256'
+        if a.write_pins:
+            omitted = {'tethering_payload.img'}
+            names = sorted((f.name for f in out.iterdir() if f.name not in omitted), key=lambda n: n.encode())
+            pins.write_text(
+                '# OneOS package set n6-f8: sha256sum of out/overlays_n6_fold8 '
+                '(scripts/make-fold8-coloros.py), minus tethering_payload.img.\n'
+                f'# app/build.gradle.kts packs exactly these files into the APK and fails the build when it differs.\n'
+                + ''.join(f'{sha(out / n)}  {n}\n' for n in names)
+            )
+        expected = pins.read_text()
         have = {n: h for h, n in (line.split() for line in expected.splitlines() if line and not line.startswith('#'))}
         for f in out.iterdir():
             if have.get(f.name) != sha(f):
                 p.error(f'{f.name} differs from n6-f8.sha256; review the rebuild and update its pin explicitly')
+        for f in list(out.iterdir()):
+            if f.name not in have and f.name == 'tethering_payload.img':
+                f.unlink()
         if set(have) != {f.name for f in out.iterdir()}:
             p.error('Incomplete Fold8 package set')
         out.rename(a.out)
