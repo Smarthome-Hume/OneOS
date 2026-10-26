@@ -798,7 +798,7 @@ class StageScriptTest {
         for (name in PackageSets.N6_F8.names) assertTrue(name, File(fr.stage, name).isFile)
         refused(n6.launch(), "test root: every launch check passed")
         val pixel = Stager(fr, Profiles.FOLD8, Images.ID_PIXEL_YOGI)
-        assertEquals(PackageSets.PIXEL_F8U, pixel.set)
+        assertEquals(PackageSets.PIXEL_F8, pixel.set)
         // On a Fold8 Ultra: refused.
         fr.props["ro.product.model"] = "SM-F976B"
         fr.writeProps()

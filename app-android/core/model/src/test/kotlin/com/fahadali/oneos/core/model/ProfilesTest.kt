@@ -93,7 +93,7 @@ class ProfilesTest {
         assertEquals(
             listOf(
                 ImageChoice(Images.ID_FIND_N6, PackageSets.ID_N6_F8, tested = true),
-                ImageChoice(Images.ID_PIXEL_YOGI, PackageSets.ID_PIXEL_F8U, tested = false),
+                ImageChoice(Images.ID_PIXEL_YOGI, PackageSets.ID_PIXEL_F8, tested = true),
             ),
             fold8.choices,
         )

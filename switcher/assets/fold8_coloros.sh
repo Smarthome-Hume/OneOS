@@ -47,6 +47,13 @@ runtime)
     D=/data/oneos_fold8
     [ -f "$D/Fold8AngleRelay.dex" ] || exit 0
     reload=0
+    # Keep construction-time unfold consumers enabled as well as the patched
+    # ResourceUnfoldTransitionConfig accessors. These guest-only overlays also
+    # cover consumers which read the framework resources directly.
+    for spec in config_unfoldTransitionEnabled:OneOSColorHingeEnabled config_unfoldTransitionHingeAngle:OneOSColorHingeAngle; do
+        cmd overlay fabricate --target android --name "${spec#*:}" "android:bool/${spec%:*}" 0x12 1
+        cmd overlay enable --user 0 "com.android.shell:${spec#*:}"
+    done
     for spec in com.oplus.aod:Fold8Aod.apk com.oplus.pantanal.ums:Fold8UMS.apk com.nearme.instant.platform:Fold8Instant.apk; do
         pkg=${spec%:*}; apk="$D/${spec#*:}"
         if [ -z "$(pm path "$pkg" 2>/dev/null)" ]; then
@@ -88,6 +95,10 @@ runtime)
         chown 1000:"$uid" /data/oneos_hinge; chmod 2750 /data/oneos_hinge
         chcon u:object_r:system_data_file:s0 /data/oneos_hinge
         if ! ps -A -o ARGS | grep -q '[a]pp_process /system/bin OneOSAngleRelay '; then
+            # The data tree survives guest sessions. An old nonempty frame
+            # must not make the wait below restart SystemUI before this guest's
+            # producer has published its first readable sample.
+            rm -f /data/oneos_hinge/angle.bin
             z=$(pidof zygote64 | cut -d' ' -f1)
             (umask 027; CLASSPATH="$D/Fold8AngleRelay.dex" "$BB" nohup "$BB" setuidgid system /system/bin/app_process /system/bin OneOSAngleRelay /data/oneos_hinge/angle.bin "$z" >/data/local/tmp/oneos-angle.log 2>&1 </dev/null &)
             # Let the fresh relay frame exist before SystemUI reselects its provider.

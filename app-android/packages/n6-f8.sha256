@@ -1,9 +1,9 @@
 # OneOS package set n6-f8: sha256sum of out/overlays_n6_fold8 (scripts/make-fold8-coloros.py), minus tethering_payload.img.
 # app/build.gradle.kts packs exactly these files into the APK and fails the build when it differs.
-ccf2fbddc462eca6d7cb7f112ca1b36620fe0ccd044ff6ba28bebe13cfe6b89e  Fold8AngleRelay.dex
+7378935512ea69dedc459fcb316bb5aa34d6740c72ca8c63076573bbf4e4deba  Fold8AngleRelay.dex
 87bfba25e06a5081f5feef73aef15a90dbc9b9f39b1fe756c68fd9975ac38638  Fold8Aod.apk
 712d7a85c8b047aef1de4d8db6d227b4b5ebe7806973fd795b532de032ef77fa  Fold8Instant.apk
-8ae77cb0c89e7469b176f99f4397b62b42a300df5b0b902db0e522a981339e2c  Fold8SystemUI.apk
+357a90f96f330beb943ca245c8d71323ee2b196fa129034526ed71c5ad337e05  Fold8SystemUI.apk
 511af17427dad4f204a7317511957027d4230ba86c178e0b5645cfb42e0e06ca  Fold8UMS.apk
 29e464733052e8224c6a167f8518232ad44474be74a1e6bb78908752a70ef016  OneOSGuest.apk
 fdc3a15096df8faf04a737c47ea7d9d3e919faf24d5e2c83d37aa641c4d7132b  OneOSWallpapersFoldGrid.apk

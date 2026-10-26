@@ -47,6 +47,7 @@ val packageSets: Map<String, Pair<File, List<String>>> = linkedMapOf(
     // Find N6 image, Galaxy Z Fold8 (0.4.14, pull request #1): the Fold's set and the Fold8 fixes
     // scripts/make-fold8-coloros.py builds from it.
     "n6-f8" to (File(repoRoot, "out/overlays_n6_fold8") to listOf("tethering_payload.img")),
+    "pixel-f8" to (File(repoRoot, "out/overlays_pixel_fold8") to listOf("tethering_payload.img")),
 )
 // Session scripts copied from switcher/assets at build time (plus the expected
 // installd table). oneos_tunnel.sh (the server tunnel) and 7zz are never shipped.
@@ -59,6 +60,7 @@ val sessionScripts: Map<String, File> = linkedMapOf(
     "check_host_apex.sh" to File(repoRoot, "switcher/assets/check_host_apex.sh"),
     "bridges.sh" to File(repoRoot, "switcher/assets/bridges.sh"),
     "fold8_coloros.sh" to File(repoRoot, "switcher/assets/fold8_coloros.sh"),
+    "fold8_pixel.sh" to File(repoRoot, "switcher/assets/fold8_pixel.sh"),
     "guest_google.sh" to File(repoRoot, "switcher/assets/guest_google.sh"),
     "zygote_exec" to File(repoRoot, "switcher/assets/zygote_exec"),
     "host_installd.txt" to File(repoRoot, "switcher/patches/host_installd.txt"),
@@ -225,8 +227,8 @@ android {
         // 0.3.4: the Galaxy S25 profile, and OneOS Probe as its own app (flavor probe).
         // 0.3.5: Old stages (delete the stages Prepare moved aside).
         // 0.3.7: the Pixel 11 Fold image and its set on the Fold; the Find X9 Ultra IN image is gone.
-        versionCode = 32
-        versionName = "0.4.19"
+        versionCode = 35
+        versionName = "0.4.19-fold8-hinge3"
     }
 
     // One codebase, two apps (docs/app/DESIGN.md, 0.3.4): "full" is OneOS, the app

@@ -73,7 +73,7 @@ for s in data misc misc/adb misc/profiles misc/user misc/bluedroid misc/bluetoot
          misc_ce/0 misc_de/0 system system/devicestate system/package_cache \
          system/watchdog_timestamps system_de system_ce user/0 user_de/0 \
          oneos_bin oneos_bin/busybox zygote_exec oplus oplus/multimedia \
-         preapps-lib media/0 anr app local/tmp resource-cache oneos_fold8; do
+         preapps-lib media/0 anr app local/tmp resource-cache oneos_fold8 oneos_pixel_hinge oneos_hinge; do
     no_symlink "$s"
 done
 # The framework jars must be the ones built with the storage, installd and
@@ -583,6 +583,7 @@ STAGE="$STAGE" BB="$BB" /system/bin/sh "$STAGE/guest_google.sh" prepare ||
 # After the system_ext overlay above: a bind made under system_ext before it is
 # hidden by it (0.4.14 on the Z Fold8: SystemUI kept the image's, no fold layout).
 STAGE="$STAGE" BB="$BB" /system/bin/sh "$STAGE/fold8_coloros.sh" prepare || exit 3
+STAGE="$STAGE" BB="$BB" /system/bin/sh "$STAGE/fold8_pixel.sh" prepare || exit 3
 # ColorOS feature switches the guest needs, added to com.oplus.features_config.xml
 # in its system_ext, a feature file it already loads (the my_* feature files are
 # only read with CUST_LEVEL_LIST, which OPPO's init sets):
@@ -735,6 +736,55 @@ if [ -f "$GUEST_SYSTEM_EXT/priv-app/SystemUIGoogle/SystemUIGoogle.apk" ] && [ -f
     else
         echo "Pixel status bar overlay left out (ONEOS_GUEST_STATUSBAR_PADDING=0)"
     fi
+fi
+# Pixel 17's WallpaperDataParser calls next() once for <description>. Its
+# indented serializer writes whitespace there, so next() returns TEXT and the
+# saved component is skipped. Remove only whitespace between XML elements,
+# preserving every component, crop, colour, content value and wallpaper file.
+if [ "${ONEOS_PROFILE:-}" = f8 ] && [ -f "$GUEST_SYSTEM_EXT/priv-app/SystemUIGoogle/SystemUIGoogle.apk" ]; then
+    WREL=system/users/0/wallpaper_info.xml
+    no_symlink "$WREL"
+    WFILE="$STAGE/data/$WREL"
+    if [ -f "$WFILE" ] && [ ! -L "$WFILE" ] && [ "$(head -c 5 "$WFILE")" = '<?xml' ]; then
+        no_symlink "$WREL.oneos-normalized"
+        no_symlink "$WREL.oneos-spacing-backup"
+        if cp -p "$WFILE" "$WFILE.oneos-normalized" &&
+                "$BB" sed ':a
+N
+$!ba
+s/>[[:space:]]*</></g' "$WFILE" > "$WFILE.oneos-normalized" &&
+                [ -s "$WFILE.oneos-normalized" ]; then
+            if ! cmp -s "$WFILE" "$WFILE.oneos-normalized"; then
+                if cp -p "$WFILE" "$WFILE.oneos-spacing-backup"; then
+                    mv -f "$WFILE.oneos-normalized" "$WFILE"
+                    echo "Pixel wallpaper: normalized description spacing; saved selection retained"
+                else
+                    rm -f "$WFILE.oneos-normalized"
+                    echo "WARNING: Pixel wallpaper backup failed; original retained"
+                fi
+            else
+                rm -f "$WFILE.oneos-normalized"
+            fi
+        else
+            rm -f "$WFILE.oneos-normalized"
+            echo "WARNING: Pixel wallpaper normalization failed; original retained"
+        fi
+    fi
+fi
+if [ -n "$OEM_FILES" ]; then
+    # A stage copy, not a bind of host data: safe to label like a system file.
+    $BB chcon -h -R u:object_r:system_file:s0 "$STAGE/oem" 2>/dev/null || true
+    $BB mount --bind "$STAGE/oem" "$ROOTFS/oem" &&
+        echo "Bound guest /oem -> $ROOTFS/oem:$OEM_FILES"
+fi
+
+# Pixel Fold8: framework boot flags are visible to SystemUI and the launcher.
+if [ "${ONEOS_PROFILE:-}" = f8 ] && grep -q '^  "set": "pixel-f8",$' "$STAGE/.oneos_stage"; then
+    mkdir -p "$STAGE/oem/overlay"
+    cp "$STAGE/Fold8PixelUnfold.apk" "$STAGE/oem/overlay/"
+    chmod 755 "$STAGE/oem" "$STAGE/oem/overlay"
+    chmod 644 "$STAGE/oem/overlay/Fold8PixelUnfold.apk"
+    OEM_FILES="$OEM_FILES overlay/Fold8PixelUnfold.apk"
 fi
 if [ $INJ = 1 ]; then
     mkdir -p "$STAGE/oem/overlay" &&
@@ -1353,7 +1403,63 @@ chmod 0771 "$STAGE/data/preapps-lib" 2>/dev/null || true
 # the cover instead of sleeping (ColorOS itself only sleeps on fold with
 # continue_using_apps_when_folded=2). vendor (default for now) = run 30.
 DSDIR="$STAGE/data/system/devicestate"
-if [ "${ONEOS_GUEST_DEVICE_STATES:-vendor}" = oneos ]; then
+DS_DEFAULT=vendor
+FOLD8_COLOR_HINGE=0
+if [ "${ONEOS_PROFILE:-}" = f8 ] && grep -q '^  "set": "n6-f8",$' "$STAGE/.oneos_stage" && grep -q '^  "image": "coloros17-findn6",$' "$STAGE/.oneos_stage"; then
+    DS_DEFAULT=fold8-hinge
+    FOLD8_COLOR_HINGE=1
+fi
+if [ "$FOLD8_COLOR_HINGE" = 1 ] && [ "${ONEOS_GUEST_DEVICE_STATES:-$DS_DEFAULT}" = fold8-hinge ]; then
+    mkdir -p "$DSDIR"
+    cat > "$DSDIR/device_state_configuration.xml" <<'F8DSX'
+<?xml version="1.0" encoding="utf-8"?>
+<!-- OneOS Fold8 ColorOS hinge prototype. Lid switch owns closed/open panels. -->
+<device-state-config>
+    <device-state>
+        <identifier>0</identifier><name>CLOSE</name>
+        <properties>
+            <property>com.android.server.policy.PROPERTY_FOLDABLE_HARDWARE_CONFIGURATION_FOLD_IN_CLOSED</property>
+            <property>com.android.server.policy.PROPERTY_FOLDABLE_DISPLAY_CONFIGURATION_OUTER_PRIMARY</property>
+        </properties>
+        <conditions><lid-switch><open>false</open></lid-switch></conditions>
+    </device-state>
+    <device-state>
+        <identifier>1</identifier><name>TENT</name>
+        <properties>
+            <property>com.android.server.policy.PROPERTY_FOLDABLE_HARDWARE_CONFIGURATION_FOLD_IN_CLOSED</property>
+            <property>com.android.server.policy.PROPERTY_FOLDABLE_DISPLAY_CONFIGURATION_OUTER_PRIMARY</property>
+        </properties>
+        <conditions><lid-switch><open>false</open></lid-switch></conditions>
+    </device-state>
+    <device-state>
+        <identifier>2</identifier><name>HALF_OPENED</name>
+        <properties>
+            <property>com.android.server.policy.PROPERTY_FOLDABLE_HARDWARE_CONFIGURATION_FOLD_IN_HALF_OPEN</property>
+            <property>com.android.server.policy.PROPERTY_FOLDABLE_DISPLAY_CONFIGURATION_INNER_PRIMARY</property>
+        </properties>
+        <conditions>
+            <lid-switch><open>true</open></lid-switch>
+            <sensor>
+                <type>com.samsung.sensor.folding_angle</type>
+                <name>Folding Angle  Non-wakeup</name>
+                <value><min-inclusive>15</min-inclusive><max-inclusive>165</max-inclusive></value>
+            </sensor>
+        </conditions>
+    </device-state>
+    <device-state>
+        <identifier>3</identifier><name>OPEN</name>
+        <properties>
+            <property>com.android.server.policy.PROPERTY_FOLDABLE_HARDWARE_CONFIGURATION_FOLD_IN_OPEN</property>
+            <property>com.android.server.policy.PROPERTY_FOLDABLE_DISPLAY_CONFIGURATION_INNER_PRIMARY</property>
+        </properties>
+        <conditions><lid-switch><open>true</open></lid-switch></conditions>
+    </device-state>
+</device-state-config>
+F8DSX
+    chown 1000:1000 "$DSDIR" "$DSDIR/device_state_configuration.xml"
+    chmod 644 "$DSDIR/device_state_configuration.xml"
+    echo "Guest device states: Fold8 continuous hinge (0 closed, 2 half-open 15..165 degrees, 3 open)"
+elif [ "${ONEOS_GUEST_DEVICE_STATES:-$DS_DEFAULT}" = oneos ]; then
     mkdir -p "$DSDIR"
     cat > "$DSDIR/device_state_configuration.xml" <<'DSX'
 <?xml version="1.0" encoding="utf-8"?>

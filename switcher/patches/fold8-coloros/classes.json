@@ -46,5 +46,13 @@
   "smali_classes7/com/android/systemui/unfold/updates/hinge/Fold8HingeRelay.smali": {
     "before": null,
     "after": "02ae202a754a36150be20ce148e1fccf4ab622f9ea14d2e41104431387916db0"
+  },
+  "smali_classes7/com/android/systemui/unfold/FullscreenLightRevealAnimationController.smali": {
+    "before": "c38170e710e10166af984e3444afbee28b6a60c99e92dd6d0628a3c118a07f1d",
+    "after": "0a62f1d4bae3a84e3e714074ee58f71d92a21ea60b54b4e9dd6eaca00e733444"
+  },
+  "smali_classes7/com/android/systemui/unfold/UnfoldLightRevealOverlayAnimation.smali": {
+    "before": "421dc997197526d1a567502dfbe08c9bfba2cca841e41ee9717615ada440dce2",
+    "after": "207bbd37865edc9151591a42ad4176a28a38c41e7cae0b5b3a323b4158cd022f"
   }
 }

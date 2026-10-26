@@ -21,7 +21,7 @@ class CompatEvaluatorTest {
         assertEquals("Has run on the Z Fold (F8U): ColorOS 17 · Find N6 build; Pixel 11 Fold.", r.find("tested-model")!!.detail)
         assertEquals("Has run on: ColorOS 17 · Find N6 build on the Z Fold (F8U); Pixel 11 Fold on the Z Fold (F8U); " +
             "ColorOS 17 · Find X9 Ultra build on the Galaxy S26 Ultra; ColorOS 17 · Find X9 Ultra build on the Galaxy S25 Ultra; " +
-            "ColorOS 17 · Find X9 Ultra build on the Galaxy S25; ColorOS 17 · Find N6 build on the Galaxy Z Fold8.",
+            "ColorOS 17 · Find X9 Ultra build on the Galaxy S25; ColorOS 17 · Find N6 build on the Galaxy Z Fold8; Pixel 11 Fold on the Galaxy Z Fold8.",
             CompatEvaluator.TESTED_SCOPE,
         )
         assertEquals(Level.OK, r.level("soc-snapdragon"))

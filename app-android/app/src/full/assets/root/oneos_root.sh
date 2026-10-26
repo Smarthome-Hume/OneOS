@@ -103,7 +103,7 @@ IMAGE_SDK=37
 # installd codes the guard jars carry (InstalldExpected.SHA256).
 INSTALLD_SHA=791e52c441b62944f88244a2610b9433c869c9c3916a49f43d14552de82280f2
 # Session scripts from switcher/assets plus the expected installd table.
-SCRIPTS="oneos_switch.sh guest_prepare.sh guest_start.sh guest_props.sh return_to_oneui.sh check_host_apex.sh bridges.sh fold8_coloros.sh guest_google.sh zygote_exec host_installd.txt"
+SCRIPTS="oneos_switch.sh guest_prepare.sh guest_start.sh guest_props.sh return_to_oneui.sh check_host_apex.sh bridges.sh fold8_coloros.sh fold8_pixel.sh guest_google.sh zygote_exec host_installd.txt"
 SET_COMMON="services_patched.jar oplus-services_patched.jar vold_patched service.incremental_patched.so OneOSGuest.apk ims-ext-common_patched.jar oplus-telephony-common_patched.jar surfaceflinger_patched guards.txt art_payload.img i18n_payload.img runtime_payload.img sdkext_payload.img crashrecovery_payload.img extservices_payload.img permission_payload.img wifi_payload.img appsearch_payload.img mediaprovider_payload.img adservices_payload.img rkpd_payload.img healthfitness_payload.img ondevicepersonalization_payload.img configinfrastructure_payload.img"
 # The Pixel sets (the Fold's 0.3.7, the S26 Ultra's 0.4.10): services.jar with the guest vold as gvld, the signal
 # poll, Pixel's status bar RRO, the in-guest OneOS app and its own payloads.
@@ -160,7 +160,7 @@ profile_set() {
         "s-plus-8750 coloros17-findx9u-in") echo x9u-in-sultra ;;
         "s-plus-8750 coloros17-findx9u") echo x9u-sultra ;;
         "f8 coloros17-findn6") echo n6-f8 ;;
-        "f8 pixel11fold-yogi") echo pixel-f8u ;;
+        "f8 pixel11fold-yogi") echo pixel-f8 ;;
         "s-8850 coloros17-findx9u-in") echo x9u-in-sultra ;;
         "s-8850 coloros17-findx9u") echo x9u-sultra ;;
         "s-8850 pixel11pro-kodiak") echo pixel-sultra ;;
@@ -209,6 +209,7 @@ set_files() {
         x9u-sultra) echo "$SET_COMMON" ;;
         x9u-in-sultra) echo "$SET_COMMON cellbroadcast_payload.img" ;;
         pixel-f8u) echo "$SET_PIXEL" ;;
+        pixel-f8) echo "$SET_PIXEL Fold8PixelSystemUI.apk Fold8AngleRelay.dex Fold8PixelUnfold.apk" ;;
         pixel-sultra) echo "$SET_PIXEL" ;;
         *) return 1 ;;
     esac
@@ -220,7 +221,7 @@ set_image() {
         n6-f8u|n6-f8) echo coloros17-findn6 ;;
         x9u-sultra) echo coloros17-findx9u ;;
         x9u-in-sultra) echo coloros17-findx9u-in ;;
-        pixel-f8u) echo pixel11fold-yogi ;;
+        pixel-f8u|pixel-f8) echo pixel11fold-yogi ;;
         pixel-sultra) echo pixel11pro-kodiak ;;
         *) return 1 ;;
     esac

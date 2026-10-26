@@ -1154,7 +1154,14 @@ esac
 [ "$GUEST_DENSITY" = "${ONEOS_GUEST_DENSITY:-auto}" ] || echo "ONEOS_GUEST_DENSITY=$ONEOS_GUEST_DENSITY is not off, auto or 120-640: auto"
 # ONEOS_GUEST_POSTURE=live: the fold line's posture follows the guest's hinge
 # state instead of always flat.
-GUEST_POSTURE_LIVE=0; [ "${ONEOS_GUEST_POSTURE:-flat}" = live ] && GUEST_POSTURE_LIVE=1
+POSTURE_DEFAULT=flat
+if [ "${ONEOS_PROFILE:-}" = f8 ] && [ "$GUEST_OPLUS" = 1 ] && grep -q '^  "set": "n6-f8",$' "$STAGE/.oneos_stage"; then
+    POSTURE_DEFAULT=live
+fi
+if [ "${ONEOS_PROFILE:-}" = f8 ] && [ "$GUEST_OPLUS" = 0 ] && grep -q '^  "set": "pixel-f8",$' "$STAGE/.oneos_stage"; then
+    POSTURE_DEFAULT=live
+fi
+GUEST_POSTURE_LIVE=0; [ "${ONEOS_GUEST_POSTURE:-$POSTURE_DEFAULT}" = live ] && GUEST_POSTURE_LIVE=1
 GUEST_FOLD_FORM=0; [ "${ONEOS_GUEST_FORM:-fold}" = fold ] && GUEST_FOLD_FORM=1
 # Start UI Activator daemon
 $BB sh -c "
@@ -1596,6 +1603,11 @@ while true; do
             # Galaxy Z Fold8, Find N6 set: AOD, widgets, taskbar and the hinge relay in the guest.
             if [ \"${ONEOS_PROFILE:-}\" = f8 ] && grep -q coloros17-findn6 \"$STAGE/.oneos_stage\" && [ -f \"$STAGE/data/oneos_fold8/runtime.sh\" ]; then
                 $BB nsenter -t \$PID -m /system/bin/sh /data/oneos_genv.sh /system/bin/sh /data/oneos_fold8/runtime.sh runtime >\"$STAGE/fold8_runtime.log\" 2>&1 || echo '[UI Activator] Fold8 runtime setup failed; see fold8_runtime.log'
+            fi
+
+            # Pixel Fold8: start the system-UID sensor reader in the guest namespace.
+            if [ \"${ONEOS_PROFILE:-}\" = f8 ] && grep -q 'pixel-f8' \"$STAGE/.oneos_stage\" && [ -f \"$STAGE/data/oneos_pixel_hinge/runtime.sh\" ]; then
+                $BB nsenter -t \$PID -m /system/bin/sh /data/oneos_genv.sh /system/bin/sh /data/oneos_pixel_hinge/runtime.sh runtime >\"$STAGE/pixel_hinge_runtime.log\" 2>&1 || echo '[UI Activator] Pixel hinge relay unavailable; native sensor fallback active'
             fi
 
             # Populate network permissions for all installed packages

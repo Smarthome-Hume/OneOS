@@ -159,3 +159,42 @@ The pull request keeps an existing installation with old app ids
 a stage before shutdown. Since 0.4.16 it starts without One UI's copies, as
 the pull request did ([coloros-google.md](coloros-google.md)).
 
+
+## Continuous posture and animation update (local build 0.4.19-fold8-hinge3)
+
+Fold8 / `n6-f8` now defaults to a guest device-state file that keeps Samsung's
+lid-controlled state 0 (closed), state 1 (tent), and state 3 (open), and adds
+state 2 (half-open) when the lid is open and vendor sensor 65686 reports
+15–165 degrees. The exact sensor name and string type were read from the
+connected SM-F971B. The shipped ColorOS posture mapping already maps 2 to
+HALF_OPENED. The display-layout generator reads the same prepared state file,
+so state 2 retains the inner panel. A missing sensor falls back to the
+lid-only open state. Explicit `ONEOS_GUEST_DEVICE_STATES=vendor` retains the
+previous behavior; `oneos` retains the earlier two-state property config.
+
+The guest fold-line setting now follows live posture for `n6-f8`, retaining
+`ONEOS_GUEST_POSTURE=flat` as an explicit opt-out. Other profiles and package
+sets keep their defaults. Runtime startup removes a previous guest's angle
+frame before waiting for the new producer, and enables the two unfold
+resource gates inside the guest before SystemUI is restarted.
+
+Opening and HALF_OPENED state 2 were confirmed on-device after a normal
+keep-data preparation and cold guest start. The first opening reveal used
+only the left half of the inner display. The reveal controller now refreshes
+its internal display information whenever it computes overlay layout bounds,
+rather than retaining the geometry from SystemUI construction. Its original
+display selector, rotation handling and panel choice are retained.
+`Fold8RevealGeometry` falls back to the original cached list if a fresh lookup
+fails. The owner confirmed the corrected reveal fills the entire inner
+display; logs reported 2448 by 1848 in natural rotation.
+
+The native progress provider already sent START_CLOSING and FINISH_CLOSED.
+The reveal overlay created for FOLD held its reveal amount at 1, making it
+fully transparent throughout closing. It now follows supplied progress for
+both directions while retaining initial FOLD=1 and UNFOLD=0 values and native
+finish/removal behavior. The owner confirmed closing animation works and
+half-folded apps remain usable. These animation changes were verified as
+session-only SystemUI mounts before packaging; the final packaged update
+still requires a cold guest start check. These updates must travel
+through the app's normal package preparation: editing staged scripts and
+updating only files.sha256 failed the app’s stage-integrity check during the prototype attempt.

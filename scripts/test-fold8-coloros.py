@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / 'switcher/assets/fold8_coloros.sh'
@@ -44,6 +45,45 @@ class Fold8Tests(unittest.TestCase):
             self.assertNotEqual(0, r.returncode)
             self.assertIn(b'unexpected SystemUI path', r.stderr)
             self.assertFalse((stage / 'data').exists())
+
+    def test_hinge_state_config_scope_and_explicit_opt_out(self):
+        prepare = (ROOT / 'switcher/assets/guest_prepare.sh').read_text()
+        block = prepare.split('DSDIR="$STAGE/data/system/devicestate"', 1)[1].split('# SELinux labels matter', 1)[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            stage = Path(tmp)
+            tools = stage / 'tools'; tools.mkdir()
+            (tools / 'chown').write_text('#!/bin/sh\nexit 0\n')
+            (tools / 'chown').chmod(0o755)
+            cases = [
+                ('f8', 'coloros17-findn6', 'n6-f8', '', [0, 1, 2, 3]),
+                ('f8u', 'coloros17-findn6', 'n6-f8u', '', []),
+                ('f8', 'pixel11fold-yogi', 'pixel-f8', '', []),
+                ('f8', 'coloros17-findn6', 'n6-f8', 'vendor', []),
+                ('f8', 'coloros17-findn6', 'n6-f8', 'oneos', [0, 3]),
+            ]
+            for profile, image, fileset, mode, ids in cases:
+                (stage / '.oneos_stage').write_text(json.dumps(dict(image=image, set=fileset, created=0), indent=2) + '\n')
+                dest = stage / 'data/system/devicestate'
+                env = dict(os.environ, STAGE=tmp, DSDIR=str(dest), ONEOS_PROFILE=profile,
+                           PATH=str(tools) + ':' + os.environ['PATH'])
+                env.pop('ONEOS_GUEST_DEVICE_STATES', None)
+                if mode:
+                    env['ONEOS_GUEST_DEVICE_STATES'] = mode
+                subprocess.run(['/bin/sh', '-ec', block], env=env, check=True, capture_output=True)
+                config = dest / 'device_state_configuration.xml'
+                if not ids:
+                    self.assertFalse(config.exists())
+                    continue
+                states = ET.parse(config).getroot().findall('device-state')
+                self.assertEqual(ids, [int(x.findtext('identifier')) for x in states])
+                if len(ids) == 4:
+                    half = states[2]
+                    sensor = half.find('conditions/sensor')
+                    self.assertEqual('true', half.findtext('conditions/lid-switch/open'))
+                    self.assertEqual('com.samsung.sensor.folding_angle', sensor.findtext('type'))
+                    self.assertEqual('Folding Angle  Non-wakeup', sensor.findtext('name'))
+                    self.assertEqual('15', sensor.findtext('value/min-inclusive'))
+                    self.assertEqual('165', sensor.findtext('value/max-inclusive'))
 
     def test_google_is_no_longer_fold8_only(self):
         # Play services and the Play Store: guest_google.sh, every ColorOS set.

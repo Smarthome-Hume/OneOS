@@ -33,7 +33,7 @@ def run(*args):
     subprocess.run([str(a) for a in args], check=True)
 
 
-def repack(original, rebuilt, output, zipalign):
+def repack(original, rebuilt, output, zipalign, geometry_dex):
     """Replace only touched dex entries; leave OEM resources and signer identity.
 
     The retained signer block supplies system-partition certificate metadata;
@@ -63,6 +63,9 @@ def repack(original, rebuilt, output, zipalign):
             dst.fp.write(header + body + desc)
             dst.filelist.append(entry); dst.NameToInfo[entry.filename] = entry
             dst.start_dir = dst.fp.tell(); dst._didModify = True
+        assert 'classes10.dex' not in src.namelist()
+        entry = zipfile.ZipInfo('classes10.dex', src.getinfo('classes7.dex').date_time)
+        dst.writestr(entry, geometry_dex.read_bytes(), compress_type=zipfile.ZIP_STORED)
     run(zipalign, '-f', '-P', '16', '4', rawzip, aligned)
     rawzip.unlink()
     a = original.read_bytes()
@@ -80,7 +83,7 @@ def repack(original, rebuilt, output, zipalign):
     struct.pack_into('<I', result, e + len(block) + 16, cd + len(block))
     output.write_bytes(result)
     with zipfile.ZipFile(original) as src, zipfile.ZipFile(output) as dst:
-        assert src.namelist() == dst.namelist()
+        assert src.namelist() + ['classes10.dex'] == dst.namelist()
         assert dst.testzip() is None
         for n in src.namelist():
             if n not in dex:
@@ -142,6 +145,12 @@ def main():
                 p.error(f'{source} differs from the existing N6 set')
             shutil.copyfile(source, out / name)
         check_guards(out)
+        geometry_classes = w / 'geometry-classes'; geometry_classes.mkdir()
+        geometry_dex = w / 'geometry-dex'; geometry_dex.mkdir()
+        run('javac', '--release', '8', '-classpath', android, '-d', geometry_classes,
+            ROOT / 'switcher/patches/fold8-coloros/Fold8RevealGeometry.java')
+        run(bt / 'd8', '--min-api', '31', '--lib', android, '--output', geometry_dex,
+            *sorted(geometry_classes.rglob('*.class')))
         # Decode only the dex entries we replace. On macOS the complete
         # 73k-class tree consumes over a GiB; other dex entries are copied
         # directly from the original APK by repack(), never rebuilt.
@@ -159,7 +168,7 @@ def main():
         rebuilt = w / 'rebuilt.apk'
         apk('b', '-q', '-o', rebuilt, decoded)
         shutil.rmtree(decoded)
-        repack(a.systemui, rebuilt, out / 'Fold8SystemUI.apk', bt / 'zipalign')
+        repack(a.systemui, rebuilt, out / 'Fold8SystemUI.apk', bt / 'zipalign', geometry_dex / 'classes.dex')
         rebuilt.unlink()
         run('python3', '-I', ROOT / 'scripts/check-dex.py', out / 'Fold8SystemUI.apk')
         classes = w / 'classes'; classes.mkdir()

@@ -38,7 +38,7 @@ class PackageSetsTest {
         assertEquals("out/overlays_x9u_in_r51", xin.sourceDir)
         assertEquals(Images.ID_FIND_X9U_IN, xin.imageId)
         assertEquals("out/overlays_pixel_yogi", pixel.sourceDir)
-        assertEquals(listOf(n6, x9u, xin, pixel, PackageSets.PIXEL_SULTRA, PackageSets.N6_F8), PackageSets.ALL)
+        assertEquals(listOf(n6, x9u, xin, pixel, PackageSets.PIXEL_SULTRA, PackageSets.N6_F8, PackageSets.PIXEL_F8), PackageSets.ALL)
         // The Z Fold8's Find N6 set (0.4.14, pull request #1): the Fold's files and five Fold8 fixes.
         val f8 = PackageSets.N6_F8
         assertEquals(Images.ID_FIND_N6, f8.imageId)

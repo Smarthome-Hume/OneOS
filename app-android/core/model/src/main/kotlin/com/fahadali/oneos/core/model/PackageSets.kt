@@ -157,6 +157,7 @@ object PackageSets {
     const val ID_X9U_SULTRA = "x9u-sultra"
     const val ID_X9U_IN_SULTRA = "x9u-in-sultra"
     const val ID_PIXEL_F8U = "pixel-f8u"
+    const val ID_PIXEL_F8 = "pixel-f8"
     const val ID_PIXEL_SULTRA = "pixel-sultra"
 
     /** Never mounted (guest_prepare.sh only keeps the host module); left out of every set. */
@@ -314,7 +315,19 @@ object PackageSets {
         hasReturnApp = true,
     )
 
-    val ALL: List<PackageSet> = listOf(N6_F8U, X9U_SULTRA, X9U_IN_SULTRA, PIXEL_F8U, PIXEL_SULTRA, N6_F8)
+    /** Pixel's base payloads plus the measured Fold8 hinge adapter and boot flags. */
+    val PIXEL_F8 = PackageSet(
+        id = ID_PIXEL_F8,
+        imageId = Images.ID_PIXEL_YOGI,
+        sourceDir = "out/overlays_pixel_fold8",
+        files = PIXEL_F8U.files + listOf("Fold8PixelSystemUI.apk", "Fold8AngleRelay.dex", "Fold8PixelUnfold.apk")
+            .map { PackageFile(it, FileRole.GUEST_FIX) },
+        omitted = listOf(TETHERING),
+        approxBytes = PIXEL_F8U.approxBytes + 50_800_000L,
+        hasReturnApp = true,
+    )
+
+    val ALL: List<PackageSet> = listOf(N6_F8U, X9U_SULTRA, X9U_IN_SULTRA, PIXEL_F8U, PIXEL_SULTRA, N6_F8, PIXEL_F8)
 
     fun byId(id: String, sets: List<PackageSet> = ALL): PackageSet? = sets.firstOrNull { it.id == id }
 }

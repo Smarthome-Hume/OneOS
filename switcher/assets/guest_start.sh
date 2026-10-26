@@ -348,6 +348,10 @@ if [ "$LAYOUT_HIDDEN" = 1 ] && [ "${ONEOS_GUEST_FOLD:-layout}" != off ]; then
             # (h8q) adds 1 TENT, which had no layout.
             STATES="0:$COVER:$INNER"
             DSC=/vendor/etc/devicestate/device_state_configuration.xml
+            # Match the same root-prepared state file the guest framework reads.
+            if [ -f /data/system/devicestate/device_state_configuration.xml ] && [ ! -L /data/system/devicestate/device_state_configuration.xml ]; then
+                DSC=/data/system/devicestate/device_state_configuration.xml
+            fi
             for id in $(sed -n 's/.*<identifier>\([0-9][0-9]*\)<\/identifier>.*/\1/p' "$DSC" 2>/dev/null | sort -un); do
                 [ "$id" = 0 ] || STATES="$STATES $id:$INNER:$COVER"
             done
