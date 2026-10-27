@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One UI on SM-S948B, Probe display/framework_res.txt, 2026-10-27:
+     bounding rect Rect(680, 0 - 760, 139) px at density 3.75
+     = 21.333dp wide x 37.067dp high, centred on 1440px. Rect approximation
+     in One UI resolves to the same path, so it is copied verbatim, not a
+     reference, to avoid a cross-package reference in an RRO. -->
+<resources>
+    <string name="config_mainBuiltInDisplayCutout">M 0,0 H -10.66666666666667 V 37.06666666666667 H 10.66666666666667 V 0 H 0 Z @dp</string>
+    <string name="config_mainBuiltInDisplayCutoutRectApproximation">M 0,0 H -10.66666666666667 V 37.06666666666667 H 10.66666666666667 V 0 H 0 Z @dp</string>
+</resources>

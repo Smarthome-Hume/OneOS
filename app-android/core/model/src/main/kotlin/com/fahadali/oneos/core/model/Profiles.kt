@@ -200,9 +200,13 @@ object Profiles {
         codename = "m3q",
         socModel = "SM8850",
         form = FormFactor.BAR,
-        // 0.4.10: the Pixel 11 Pro image too, untested. SM8850 has the SVE that
-        // Pixel's system code needs; the SM8750 phones do not.
-        choices = S_ULTRA_CHOICES + ImageChoice(Images.ID_PIXEL_KODIAK, PackageSets.ID_PIXEL_SULTRA, tested = false),
+        // S26U fork: only the two images actually run on S26U, both tested.
+        // Pixel kodiak was "untested" upstream; it ran on S26U 2026-10-27,
+        // so tested = true here. The IN build is NOT listed: untested on S26U.
+        choices = listOf(
+            ImageChoice(Images.ID_FIND_X9U, PackageSets.ID_X9U_SULTRA, tested = true),
+            ImageChoice(Images.ID_PIXEL_KODIAK, PackageSets.ID_PIXEL_SULTRA, tested = true),
+        ),
     )
 
     val S_ULTRA_8750 = PhoneProfile(
@@ -437,12 +441,11 @@ object Profiles {
         notes = listOf(EXYNOS),
     )
 
-    val BUILT_IN: List<PhoneProfile> = listOf(
-        F8U, S_ULTRA_8850, S_ULTRA_8750, S_8750, FOLD7, S_PLUS_8750, FOLD8,
-        S_8850, S_8850_JP, S_ULTRA_8650, S_8550, S_PLUS_8550, S_PLUS_8850,
-        S_PLUS_9965, FLIP7,
-    )
-
+    // S26U fork: the app only resolves Galaxy S26 Ultra. Other profile
+    // objects stay defined below for reference / tests, but are NOT in
+    // BUILT_IN, so they are never offered. Notion AI worker: deleting them
+    // is Phase 2 cleanup, after the S26U tests below are green.
+    val BUILT_IN: List<PhoneProfile> = listOf(S_ULTRA_8850)
     /** `ro.build.version.oneui` values seen on profiled phones (all One UI 9.0). */
     val ONE_UI_SEEN: Set<Int> = setOf(90000)
 

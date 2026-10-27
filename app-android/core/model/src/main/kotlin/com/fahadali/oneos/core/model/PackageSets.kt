@@ -354,8 +354,9 @@ object PackageSets {
         hasReturnApp = true,
     )
 
-    val ALL: List<PackageSet> = listOf(N6_F8U, X9U_SULTRA, X9U_IN_SULTRA, PIXEL_F8U, PIXEL_SULTRA, N6_F8, PIXEL_F8, PIXEL9_SULTRA)
-
+    // S26U fork: only the two sets for the two S26U images. Other set
+    // objects stay defined for reference, but are NOT in ALL.
+    val ALL: List<PackageSet> = listOf(X9U_SULTRA, PIXEL_SULTRA)
     fun byId(id: String, sets: List<PackageSet> = ALL): PackageSet? = sets.firstOrNull { it.id == id }
 }
 

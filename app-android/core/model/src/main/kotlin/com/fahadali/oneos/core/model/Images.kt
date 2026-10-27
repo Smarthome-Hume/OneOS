@@ -90,10 +90,15 @@ data class ImageRef(
 }
 
 /**
- * The built-in image table. Sizes and hashes verified on the server on
- * 2026-10-22 (the Pixel 11 Fold image on 2026-10-24): the gunzip of each
- * upload is byte-identical to the server image. 0.3.7 dropped the Find X9
- * Ultra IN build (`coloros17-findx9u-in`); 0.4.11 takes it again.
+ * OneOS-S26U fork: the OFFERED image table is S26 Ultra only (see [ALL]).
+ * Upstream 0.4.13 offered five images; this fork offers only the two that
+ * have actually run on a Galaxy S26 Ultra (SM-S948, SM8850). The other
+ * three ImageRef objects are KEPT in this file for now (not deleted):
+ * they are referenced by RETIRED recognition, by package sets, and by
+ * tests for other phones. Deleting them is Phase 2 cleanup for the
+ * Notion AI worker, after those call sites are removed. Keeping the
+ * objects does NOT offer them: [ALL], Profiles.BUILT_IN and
+ * PackageSets.ALL are the offered lists, and they are S26U-only.
  */
 object Images {
     /** Where the images come from: the README (this repository does not host them). */
@@ -237,7 +242,8 @@ object Images {
      * image, MysticGSI `--type pixel --no-debloat`, then Pixel Camera,
      * PixelCameraServices, PixelDisplayService and grilservice removed, as for the
      * Fold's full image. Its system code uses SVE in every process (RefBase's
-     * constructor), so only SM8850 phones take it. Untested.
+     * constructor), so only SM8850 phones take it. S26U fork: actually run
+     * on S26U 2026-10-27, so testedOn below is "Galaxy S26 Ultra".
      */
     val PIXEL_KODIAK = ImageRef(
         id = ID_PIXEL_KODIAK,
@@ -254,7 +260,7 @@ object Images {
         gzSha256 = "ee9b6005a086627220841618ea2edaa278c4e153460f7f947fc7fc9dea8d727c",
         rawBytes = 6_529_871_872L,
         rawSha256 = "ac661a520263fa73a2b9996f19763350457b1558863d1dc15326a365ce1784c6",
-        testedOn = null,
+        testedOn = "Galaxy S26 Ultra",
         cpuRequired = listOf("sve", "sve2"),
         cpuUsedByApps = emptyList(),
         googleServices = true,
@@ -297,17 +303,20 @@ object Images {
         family = SystemFamily.PIXEL,
     )
 
-    val ALL: List<ImageRef> = listOf(FIND_N6, FIND_X9U, FIND_X9U_IN, PIXEL_YOGI, PIXEL_KODIAK, PIXEL_KOMODO)
-
+    val ALL: List<ImageRef> = listOf(FIND_X9U, PIXEL_KODIAK)
     fun byId(id: String, images: List<ImageRef> = ALL): ImageRef? = images.firstOrNull { it.id == id }
 
     /**
-     * Images earlier builds took and this one no longer sets up, for their
+     * Images earlier builds took and this fork no longer offers, for their
      * names only (an old stage's marker, a copy set aside, the last session, a
-     * remembered download). None since 0.4.11: the Find X9 Ultra IN build,
-     * dropped in 0.3.7, is back in [ALL].
+     * remembered download). The IN build is here until it actually runs on
+     * S26U; do not move it back to [ALL] without a real S26U run.
      */
-    val RETIRED: List<RetiredImage> = emptyList()
+    val RETIRED: List<RetiredImage> = listOf(
+        RetiredImage(ID_FIND_N6, "Find N6", "OneOS_ColorOS17_FindN6_ZFold8.img.gz", 5_285_345_619L, 10_276_003_840L),
+        RetiredImage(ID_FIND_X9U_IN, "Find X9 Ultra IN", "OneOS_ColorOS17_FindX9Ultra_IN.img.gz", 5_882_128_321L, 12_069_945_344L),
+        RetiredImage(ID_PIXEL_YOGI, "Pixel 11 Fold", "OneOS_Pixel11Fold_Full_ZFold8.img.gz", 3_288_346_862L, 6_559_223_808L),
+    )
 
     /** "Find N6", a retired image's name, or the id itself when no build knew it. */
     fun shortName(id: String, images: List<ImageRef> = ALL, retired: List<RetiredImage> = RETIRED): String =

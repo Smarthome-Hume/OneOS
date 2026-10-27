@@ -592,6 +592,41 @@ else
     echo "SystemUIGoogle.apk: not in the image, no status bar overlay"
 fi
 
+# S26 Ultra cutout + status bar height in the Pixel guest (2026-10-27, Probe
+# findings-SM-S948B-2026-10-27): the Pixel image's framework cutout is empty
+# (Pixel's vendor overlay is not on Samsung's vendor partition) and its
+# status_bar_height_portrait is 24dp, so the guest's status bar sat too close
+# to the top. This static RRO (switcher/overlays/pixel_cutout_s26u, signed
+# like the grid overlay) gives the framework One UI's own cutout path and
+# status bar heights; guest_prepare.sh puts it in the guest's /oem/overlay.
+# Built only when the image's framework-res has the four resources and
+# declares no overlayable resources (an /oem overlay may then override any
+# of them); otherwise it is left out, never built blind.
+CUT_RRO="$ROOT/switcher/overlays/pixel_cutout_s26u"
+rm -f "$OUT/OneOSPixelS26UCutout.apk"
+"$DEBUGFS" -R "dump /system/framework/framework-res.apk $WORK/framework-res.apk" "$IMG" 2>/dev/null
+"$BT/aapt2" dump resources "$WORK/framework-res.apk" > "$WORK/fw_res.txt" 2>/dev/null || true
+CUT_MISSING=""
+for r in " string/config_mainBuiltInDisplayCutout\$" " string/config_mainBuiltInDisplayCutoutRectApproximation\$" " dimen/status_bar_height_portrait\$" " dimen/status_bar_height_default\$"; do
+    grep -q "$r" "$WORK/fw_res.txt" || CUT_MISSING="$CUT_MISSING $r"
+done
+CUT_OVERLAYABLE=$("$BT/aapt2" dump overlayable "$WORK/framework-res.apk" 2>/dev/null | head -n 3) || true
+if [ -n "$CUT_MISSING" ]; then
+    echo "framework-res.apk: no$CUT_MISSING, S26U cutout overlay not built"
+elif [ -n "$CUT_OVERLAYABLE" ]; then
+    echo "framework-res.apk declares overlayable resources, S26U cutout overlay not built"
+else
+    "$BT/aapt2" compile --dir "$CUT_RRO/res" -o "$WORK/cut.zip"
+    "$BT/aapt2" link -o "$WORK/cut.apk" -I "$AJ" --manifest "$CUT_RRO/AndroidManifest.xml" \
+        --min-sdk-version 35 --target-sdk-version 36 "$WORK/cut.zip"
+    "$BT/zipalign" -p -f 4 "$WORK/cut.apk" "$WORK/cut-aligned.apk"
+    "$BT/apksigner" sign --ks "${KEYSTORE:-$HOME/.android/debug.keystore}" \
+        --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android \
+        --out "$OUT/OneOSPixelS26UCutout.apk" "$WORK/cut-aligned.apk"
+    rm -f "$OUT/OneOSPixelS26UCutout.apk.idsig"
+    echo "built $OUT/OneOSPixelS26UCutout.apk (S26U cutout + status bar height)"
+fi
+
 # The guest's own APEX payloads, which guest_prepare.sh loop-mounts into the
 # container ($STAGE/<name>_payload.img). Extracting them on the phone picked up
 # the HOST's modules (Google-signed tethering next to ColorOS's OPPO-signed

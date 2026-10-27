@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- S26 Ultra cutout + status bar height in the Pixel guest (2026-10-27, Probe
+     findings-SM-S948B-2026-10-27): the Pixel image's framework cutout is empty
+     (Pixel's vendor overlay is not on Samsung's vendor partition) and its
+     status_bar_height_portrait is 24dp, so the guest's status bar sat too
+     close to the top. This static RRO (scripts/make-overlays.sh builds it,
+     guest_prepare.sh puts it in the guest's /oem/overlay) gives the framework
+     One UI's own cutout path and status bar heights. Resources are mapped by
+     name (framework-res declares no overlayable resources). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="oneos.overlay.pixel.cutout.s26u">
+    <application android:hasCode="false"/>
+    <overlay android:targetPackage="android"
+        android:isStatic="true"
+        android:priority="10"/>
+</manifest>

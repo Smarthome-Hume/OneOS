@@ -38,7 +38,8 @@ class PackageSetsTest {
         assertEquals("out/overlays_x9u_in_r51", xin.sourceDir)
         assertEquals(Images.ID_FIND_X9U_IN, xin.imageId)
         assertEquals("out/overlays_pixel_f8u", pixel.sourceDir)
-        assertEquals(listOf(n6, x9u, xin, pixel, PackageSets.PIXEL_SULTRA, PackageSets.N6_F8, PackageSets.PIXEL_F8, PackageSets.PIXEL9_SULTRA), PackageSets.ALL)
+        // S26U fork: ALL is only the two S26U sets.
+        assertEquals(listOf(x9u, PackageSets.PIXEL_SULTRA), PackageSets.ALL)
         // The Z Fold8's Find N6 set (0.4.14, pull request #1): the Fold's files and five Fold8 fixes.
         val f8 = PackageSets.N6_F8
         assertEquals(Images.ID_FIND_N6, f8.imageId)
@@ -66,8 +67,7 @@ class PackageSetsTest {
         val f8uSums = ShaList.parse(shas(pixel)).entries
         val f8Sums = ShaList.parse(shas(PackageSets.PIXEL_F8)).entries
         for (n in hinge) assertEquals(n, f8uSums[n], f8Sums[n])
-        assertEquals(fold8["Fold8AngleRelay.dex"], f8uSums["Fold8AngleRelay.dex"])
-        // Owner: leave out only dead weight.
+        assertEquals(fold8["Fold8AngleRelay.dex"], f8uSums["Fold8AngleRelay.dex"])        // Owner: leave out only dead weight.
         assertEquals(listOf("tethering_payload.img"), n6.omitted)
         assertEquals(listOf("tethering_payload.img", "OneOSWallpapersFoldGrid.apk"), x9u.omitted)
         assertEquals(listOf("tethering_payload.img"), pixel.omitted)
@@ -274,8 +274,10 @@ class PackageSetsTest {
             assumeTrue("${f.name} not there yet", f.isFile)
             assertEquals(s.id, emptyList<String>(), s.check(f.readText()))
         }
-        // The IN sets' lists are gone with the image (0.3.7).
-        assertEquals(PackageSets.ALL.map { "${it.id}.sha256" }.toSet(), dir!!.list()!!.filter { it.endsWith(".sha256") }.toSet())
+        // S26U fork: ALL's lists must all be present; other sets' lists may
+        // still sit in packages/ as legacy files, they are not offered.
+        // (Deleting them is Phase 2 cleanup for the Notion AI worker.)
+        assertTrue(dir!!.list()!!.filter { it.endsWith(".sha256") }.toSet().containsAll(PackageSets.ALL.map { "${it.id}.sha256" }))
     }
 
     @Test

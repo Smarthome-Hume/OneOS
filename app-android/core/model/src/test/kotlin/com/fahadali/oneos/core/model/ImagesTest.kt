@@ -56,12 +56,13 @@ class ImagesTest {
         assertEquals(emptyList<String>(), pixel.cpuUsedByApps)
         // The Pixel images have Google services and their sessions present them; the
         // Find X9 Ultra IN build has them in the image and a launch may hide them.
-        assertEquals(listOf(xin, pixel, Images.PIXEL_KODIAK, Images.PIXEL_KOMODO), Images.ALL.filter { it.googleServices })
-        assertEquals(listOf(pixel, Images.PIXEL_KODIAK, Images.PIXEL_KOMODO), Images.ALL.filter { it.presentsGms })
-        assertEquals(listOf(xin), Images.ALL.filter { it.gmsHideable })
+        // S26U fork: ALL is only x9u + kodiak. pixel here is yogi (not in
+        // ALL); kodiak is the Pixel image in ALL and it presents Gms.
+        assertEquals(listOf(Images.PIXEL_KODIAK), Images.ALL.filter { it.googleServices })
+        assertEquals(listOf(Images.PIXEL_KODIAK), Images.ALL.filter { it.presentsGms })
+        assertEquals(emptyList<ImageRef>(), Images.ALL.filter { it.gmsHideable })
         assertTrue(pixel.copy(presentsGms = false).gmsHideable)
-        assertEquals(listOf(n6, x9u, xin, pixel, Images.PIXEL_KODIAK, Images.PIXEL_KOMODO), Images.ALL)
-        // 0.4.11: the Find X9 Ultra IN build is back (0.3.3-0.3.6, dropped in 0.3.7), the same file.
+        assertEquals(listOf(x9u, Images.PIXEL_KODIAK), Images.ALL)        // 0.4.11: the Find X9 Ultra IN build is back (0.3.3-0.3.6, dropped in 0.3.7), the same file.
         assertEquals("coloros17-findx9u-in", xin.id)
         assertEquals("OneOS_ColorOS17_FindX9Ultra_IN.img.gz", xin.gzName)
         assertEquals(5_882_128_321L, xin.gzBytes)
@@ -73,16 +74,17 @@ class ImagesTest {
         assertEquals(xin, Images.byGzSize(5_882_128_321L))
         assertEquals(xin, Images.byRawSize(12_069_945_344L))
         assertEquals("Find X9 Ultra IN", Images.shortName(xin.id))
-        // Nothing is retired now; a retired image's name stays known (old stages, the last session).
-        assertEquals(emptyList<RetiredImage>(), Images.RETIRED)
+        // S26U fork: three upstream images are retired here (see Images.RETIRED).
+        assertEquals(3, Images.RETIRED.size)
+        assertEquals("Find N6", Images.RETIRED[0].shortName)
+        assertEquals("Find X9 Ultra IN", Images.RETIRED[1].shortName)
         assertEquals("Find X8 Ultra", Images.shortName(old.id, retired = listOf(old)))
         assertEquals("Find N6", Images.shortName(n6.id))
         assertEquals("not-an-image", Images.shortName("not-an-image"))
-        // Guest data stays with its own system (0.3.7): the ColorOS builds and the Pixel images.
-        assertEquals(listOf(SystemFamily.COLOROS, SystemFamily.COLOROS, SystemFamily.COLOROS, SystemFamily.PIXEL, SystemFamily.PIXEL, SystemFamily.PIXEL), Images.ALL.map { it.family })
-        // The Pixel 9 Pro XL image (0.4.22) needs no SVE, unlike the Pixel 11 builds.
+        // Guest data stays with its own system (0.3.7): the ColorOS builds and the Pixel image.
+        assertEquals(listOf(SystemFamily.COLOROS, SystemFamily.PIXEL), Images.ALL.map { it.family })
         assertEquals(emptyList<String>(), Images.PIXEL_KOMODO.cpuRequired)
-        assertEquals(listOf("sve", "sve2"), Images.PIXEL_KODIAK.cpuRequired)
+                assertEquals(listOf("sve", "sve2"), Images.PIXEL_KODIAK.cpuRequired)
         for (i in Images.ALL) assertEquals(i.id, i.id.startsWith("coloros17-"), i.family == SystemFamily.COLOROS)
 
         for (i in Images.ALL) {

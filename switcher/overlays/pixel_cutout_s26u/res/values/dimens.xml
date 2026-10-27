@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One UI on SM-S948B, Probe display/framework_res.txt, 2026-10-27.
+     v2 (2026-10-27): v1 bound into /oem but status bar still too high in the
+     setup wizard photo, so v2 overrides status_bar_height DIRECTLY (not only
+     via its portrait reference) and status_bar_height_default to the same mm
+     value, to remove any fallback reading default (30dp) or a reference that
+     does not propagate. Priority raised 1 -> 10 so this overlay wins over
+     product overlays (GoogleConfig priority 0) on any tie.
+     Navigation: Pixel framework config_navBarInteractionMode is 0 (3-button)
+     in framework-res; the guest shows a 3-button triangle that the setup
+     wizard Accept card overlaps. v2 sets gesture mode (2, Pixel default) so
+     the triangle bar is gone and Accept sits above the gesture bar as on a
+     real Pixel. navigation_bar_height is kept explicit at 48dp so switching
+     back to 3-button in Settings still gets a correct inset.
+     v3 (2026-10-27, measured): home status bar icons sit 20 image px
+     (22 phone px) above lock screen icons (home centre 47, lock centre 67,
+     camera centre 64 in screenshot px), so home icons sit above the camera
+     hole while lock icons align with it. Raising framework height by
+     ~42 phone px moves a centred icon down ~21 phone px, matching lock.
+     9.68mm = 7.54mm + 42px at ~19.7 px/mm. The SystemUI statusbar overlay
+     pins status_bar_header_height_keyguard to 7.54mm in the same build, so
+     the lock screen height does NOT follow this increase and stays put.
+     Raising framework height alone would move both screens together and
+     keep the 20px gap.
+     v4 (2026-10-27, measured after v3): v3 overshot. Home centre moved
+     47 -> 87 image px (ratio ~1.0 with height), lock centre moved
+     67 -> 86 (ratio ~0.5, so the keyguard pin did NOT hold lock), QS
+     centre 88. All three now sit ~23 image px (25 phone px) BELOW camera
+     centre 64. To bring home back to camera, reduce height by 25 phone
+     px = 1.28mm: 9.68 - 1.28 = 8.40mm. Home should land ~65 image px,
+     lock ~76 (still below camera, because pin did not hold, but closer
+     than 86).
+     v5 (2026-10-27, measured after v4): v4 landed at centre 74-75 image
+     px, not 65 as the 1:1 model predicted. The centred model holds
+     instead: centre = height/2, v3 height 191px gave centre 95px,
+     v4 height 165px gave centre 83px in theory but 74-75 measured
+     (close to OneUI centre 76 in the same scale, 1-2px off). User still
+     sees v4 as a bit low, not balanced with camera centre 64. To raise
+     centre by ~10 image px (11 phone px), reduce height by ~22 phone
+     px (centred model: 2x centre delta) = 1.22mm: 8.40 - 1.22 = 7.18mm,
+     rounded to 7.20mm. Predicted centre ~65 image px, inside the
+     pre-v3 lock range (67) the user called ok.
+     v6 (2026-10-27, measured after v5): v5 home centre 63-64, lock centre
+     67 (both image px, screenshots 16:35). User chooses home = lock, i.e.
+     home down to 67. Home down 3-4 image px (3.8 phone px) needs height
+     up 2x = 7.6 phone px = 0.39mm: 7.20 + 0.39 = 7.59mm, rounded to
+     7.60mm. Predicted home ~67. Lock may also move down a little with
+     height (lock pin did not hold in v3), so measure both again after
+     v6; home = lock exactly is not guaranteed by framework height alone. -->
+<resources>
+    <dimen name="status_bar_height">7.60mm</dimen>
+    <dimen name="status_bar_height_portrait">7.60mm</dimen>
+    <dimen name="status_bar_height_default">7.60mm</dimen>
+    <dimen name="navigation_bar_height">48dp</dimen>
+    <dimen name="navigation_bar_height_landscape">48dp</dimen>
+    <dimen name="navigation_bar_frame_height">48dp</dimen>
+    <integer name="config_navBarInteractionMode">2</integer>
+</resources>

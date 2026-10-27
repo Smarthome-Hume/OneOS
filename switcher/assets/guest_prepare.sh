@@ -483,11 +483,117 @@ ddc_xml() {
 </displayConfiguration>
 DDCEOF
 }
+# S26 Ultra (profile s-ultra-8850, phone form) brightness map, 2026-10-27:
+# Probe findings-SM-S948B-2026-10-27, /vendor/etc/displayconfig (all 5 files
+# identical, 52 points). This is the S26U panel's own map, NOT the Fold8 map
+# above: float 0.0000-1.0000, nits 0.2289-782.4283, covering the full
+# backlight range (Fold8's map stopped at float 0.196299 / 520 nits and
+# crashed DisplayDeviceConfig on this panel with backlight max 1.0).
+# Without any map, the Pixel guest maps brightness linearly and aims too
+# high on this panel (float 0.5 already gives ~650 nits here, vs ~300 nits
+# on a Pixel panel), which is why auto brightness in the guest sits higher
+# than the environment needs, even with no patch. Only port 147 (the S26U
+# main panel, displaymanager port 147) gets a file; the Fold8 branch below
+# is untouched.
+s26u_ddc_xml() {
+    cat <<'S26UEOF'
+<?xml version="1.0" encoding="utf-8"?>
+<!-- OneOS (guest_prepare.sh): S26 Ultra panel brightness map from Probe 2026-10-27, and Samsung's IR proximity sensor. -->
+<displayConfiguration>
+    <screenBrightnessMap interpolation="linear">
+        <point><value>0.0000</value><nits>0.2289</nits></point>
+        <point><value>0.0195</value><nits>4.4509</nits></point>
+        <point><value>0.0392</value><nits>6.8769</nits></point>
+        <point><value>0.0587</value><nits>11.6512</nits></point>
+        <point><value>0.0784</value><nits>18.5109</nits></point>
+        <point><value>0.0980</value><nits>27.5286</nits></point>
+        <point><value>0.1176</value><nits>38.3354</nits></point>
+        <point><value>0.1372</value><nits>49.5442</nits></point>
+        <point><value>0.1568</value><nits>64.2686</nits></point>
+        <point><value>0.1764</value><nits>81.6825</nits></point>
+        <point><value>0.1961</value><nits>99.8549</nits></point>
+        <point><value>0.2156</value><nits>117.9603</nits></point>
+        <point><value>0.2353</value><nits>132.6605</nits></point>
+        <point><value>0.2548</value><nits>153.7292</nits></point>
+        <point><value>0.2744</value><nits>177.8811</nits></point>
+        <point><value>0.2941</value><nits>203.9206</nits></point>
+        <point><value>0.3136</value><nits>232.8468</nits></point>
+        <point><value>0.3333</value><nits>265.5024</nits></point>
+        <point><value>0.3528</value><nits>300.7833</nits></point>
+        <point><value>0.3725</value><nits>339.1603</nits></point>
+        <point><value>0.3921</value><nits>379.3092</nits></point>
+        <point><value>0.4117</value><nits>422.9130</nits></point>
+        <point><value>0.4313</value><nits>467.6717</nits></point>
+        <point><value>0.4509</value><nits>515.9362</nits></point>
+        <point><value>0.4705</value><nits>567.4022</nits></point>
+        <point><value>0.4902</value><nits>621.2638</nits></point>
+        <point><value>0.5097</value><nits>652.9980</nits></point>
+        <point><value>0.5294</value><nits>657.4003</nits></point>
+        <point><value>0.5490</value><nits>663.0907</nits></point>
+        <point><value>0.5686</value><nits>666.9472</nits></point>
+        <point><value>0.5882</value><nits>672.5456</nits></point>
+        <point><value>0.6077</value><nits>677.9654</nits></point>
+        <point><value>0.6274</value><nits>682.5966</nits></point>
+        <point><value>0.6471</value><nits>687.7337</nits></point>
+        <point><value>0.6666</value><nits>691.9226</nits></point>
+        <point><value>0.6862</value><nits>697.3131</nits></point>
+        <point><value>0.7058</value><nits>701.3130</nits></point>
+        <point><value>0.7254</value><nits>707.0514</nits></point>
+        <point><value>0.7451</value><nits>712.5063</nits></point>
+        <point><value>0.7646</value><nits>718.2969</nits></point>
+        <point><value>0.7843</value><nits>723.9837</nits></point>
+        <point><value>0.8038</value><nits>728.3262</nits></point>
+        <point><value>0.8235</value><nits>734.2028</nits></point>
+        <point><value>0.8431</value><nits>739.4332</nits></point>
+        <point><value>0.8627</value><nits>744.2439</nits></point>
+        <point><value>0.8823</value><nits>750.5568</nits></point>
+        <point><value>0.9018</value><nits>755.1467</nits></point>
+        <point><value>0.9215</value><nits>760.6885</nits></point>
+        <point><value>0.9412</value><nits>766.5874</nits></point>
+        <point><value>0.9607</value><nits>770.8062</nits></point>
+        <point><value>0.9803</value><nits>776.6059</nits></point>
+        <point><value>1.0000</value><nits>782.4283</nits></point>
+    </screenBrightnessMap>
+    <proxSensor>
+        <type>com.samsung.sensor.physical_proximity</type>
+    </proxSensor>
+    <screenBrightnessRampFastDecrease>0.06</screenBrightnessRampFastDecrease>
+    <screenBrightnessRampFastIncrease>0.06</screenBrightnessRampFastIncrease>
+    <screenBrightnessRampSlowDecrease>0.04</screenBrightnessRampSlowDecrease>
+    <screenBrightnessRampSlowIncrease>0.04</screenBrightnessRampSlowIncrease>
+    <screenBrightnessRampIncreaseMaxMillis>3000</screenBrightnessRampIncreaseMaxMillis>
+    <screenBrightnessRampDecreaseMaxMillis>3000</screenBrightnessRampDecreaseMaxMillis>
+</displayConfiguration>
+S26UEOF
+}
 PETC="$GUEST_PRODUCT/etc"
 if [ -e "$ROOTFS/system/framework/oplus-services.jar" ] || [ -L "$ROOTFS/system/framework/oplus-services.jar" ]; then
     :
 elif [ "${ONEOS_GUEST_DISPLAY_CONFIG:-1}" != 1 ]; then
     echo "Display config: the image's own (ONEOS_GUEST_DISPLAY_CONFIG=0)"
+elif [ "${ONEOS_PROFILE:-f8u}" = s-ultra-8850 ] && [ "${ONEOS_GUEST_FORM:-fold}" = phone ]; then
+    if [ ! -d "$PETC" ] || [ -L "$PETC" ]; then
+        echo "Display config: no product/etc folder in the image, left out"
+    elif mount | grep -q " $PETC type overlay"; then
+        echo "Display config: overlay on product/etc already there (an earlier prepare), left as it is"
+    elif [ -e "$PETC/displayconfig" ]; then
+        echo "Display config: the image has its own product/etc/displayconfig, left as it is"
+    else
+        DOV="$STAGE/product_etc_ov"
+        mkdir -p "$DOV"
+        if ! mount | grep -q " $DOV "; then
+            $BB mount -t tmpfs -o size=256k,mode=755 tmpfs "$DOV" && $BB mount --make-private "$DOV" 2>/dev/null
+        fi
+        mkdir -p "$DOV/up/displayconfig"
+        s26u_ddc_xml > "$DOV/up/displayconfig/display_port_147.xml"
+        chmod 755 "$DOV/up" "$DOV/up/displayconfig" && chmod 644 "$DOV/up/displayconfig/"*.xml
+        $BB chcon -R u:object_r:system_file:s0 "$DOV/up" 2>/dev/null || true
+        if $BB mount -t overlay overlay -o "ro,lowerdir=$DOV/up:$PETC" "$PETC"; then
+            echo "Display config: product/etc/displayconfig/display_port_147.xml (S26 Ultra nits curve, Samsung's IR proximity)"
+        else
+            echo "Display config: read-only overlay on product/etc refused, left out"
+        fi
+    fi
 elif [ "${ONEOS_GUEST_FORM:-fold}" != fold ] || [ "${ONEOS_PROFILE:-f8u}" != f8u ]; then
     echo "Display config: the image's own (the panel files are the Z Fold8 Ultra's; profile ${ONEOS_PROFILE:-f8u}, form ${ONEOS_GUEST_FORM:-fold})"
 elif [ ! -d "$PETC" ] || [ -L "$PETC" ]; then
@@ -748,6 +854,14 @@ fi
 #   privacy dot padding 20dp. This static RRO (make-overlays.sh,
 #   switcher/overlays/pixel_statusbar) makes both 8dp.
 #   ONEOS_GUEST_STATUSBAR_PADDING=0 leaves it out.
+# - overlay/OneOSPixelS26UCutout.apk, a Pixel guest on a Galaxy S26 Ultra only.
+#   2026-10-27, Probe findings-SM-S948B-2026-10-27: the Pixel image's
+#   framework cutout is empty and its status_bar_height_portrait is 24dp, so
+#   the guest's status bar sat too close to the top. This static RRO
+#   (make-overlays.sh, switcher/overlays/pixel_cutout_s26u) gives the
+#   framework One UI's cutout path (21.333dp x 37.067dp, centred) and status
+#   bar heights (portrait 7.539978mm, default 30dp).
+#   ONEOS_GUEST_S26U_CUTOUT=0 leaves it out.
 # - overlay/OneOSPhoneInjection.apk, with the signal poll only (INJ=1 above:
 #   oneos-telephony.jar in place on a read-only system_ext). Run 43: no bars on
 #   either SIM. This static RRO (make-overlays.sh,
@@ -826,6 +940,16 @@ if [ -n "$UNFOLD_RRO" ] && [ -f "$STAGE/$UNFOLD_RRO" ]; then
         cp "$STAGE/$UNFOLD_RRO" "$STAGE/oem/overlay/" &&
         chmod 755 "$STAGE/oem" "$STAGE/oem/overlay" && chmod 644 "$STAGE/oem/overlay/$UNFOLD_RRO" &&
         OEM_FILES="$OEM_FILES overlay/$UNFOLD_RRO"
+fi
+if [ -f "$STAGE/OneOSPixelS26UCutout.apk" ]; then
+    if [ "${ONEOS_GUEST_S26U_CUTOUT:-1}" = 1 ]; then
+        mkdir -p "$STAGE/oem/overlay" &&
+            cp "$STAGE/OneOSPixelS26UCutout.apk" "$STAGE/oem/overlay/" &&
+            chmod 755 "$STAGE/oem" "$STAGE/oem/overlay" && chmod 644 "$STAGE/oem/overlay/OneOSPixelS26UCutout.apk" &&
+            OEM_FILES="$OEM_FILES overlay/OneOSPixelS26UCutout.apk"
+    else
+        echo "S26U cutout overlay left out (ONEOS_GUEST_S26U_CUTOUT=0)"
+    fi
 fi
 if [ $INJ = 1 ]; then
     mkdir -p "$STAGE/oem/overlay" &&

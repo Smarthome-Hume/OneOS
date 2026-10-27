@@ -4,9 +4,17 @@
      padding is the framework's 0dp (Pixel's vendor overlay sets it; the guest runs
      on Samsung's vendor) and the privacy dot padding 20dp, so the battery sat
      47-60 px further from the right edge than the clock from the left. Both 8dp:
-     equal insets left to right, right to left, and after a locale change. -->
+     equal insets left to right, right to left, and after a locale change.
+     v3 (2026-10-27): status_bar_header_height_keyguard is SystemUI's own
+     height for the keyguard status bar, defaulting to @dimen/status_bar_height
+     (which follows the framework). Pin it to the v2 framework height
+     7.539978mm so the lock screen does NOT follow the v3 framework increase
+     to 9.68mm that only the home status bar should get. Without this pin,
+     raising framework height moves lock and home together and the measured
+     20px home-vs-lock gap stays. -->
 <resources>
     <dimen name="rounded_corner_content_padding">8dp</dimen>
     <dimen name="ongoing_appops_dot_min_padding">8dp</dimen>
     <dimen name="status_bar_padding_end">4dp</dimen>
+    <dimen name="status_bar_header_height_keyguard">7.539978mm</dimen>
 </resources>
