@@ -172,6 +172,12 @@ so state 2 retains the inner panel. A missing sensor falls back to the
 lid-only open state. Explicit `ONEOS_GUEST_DEVICE_STATES=vendor` retains the
 previous behavior; `oneos` retains the earlier two-state property config.
 
+The Z Fold8 Ultra's `n6-f8u` gets the same device-state file and live posture
+since 0.4.21: its own vendor file has the same lid states (0 CLOSE, 3 OPEN) and
+the phone has the same sensor. It keeps the Find N6's own SystemUI (the Fold8
+SystemUI patches are measured for the Fold8's cover display), so it gets the
+half-open posture, not the Fold8's reveal animation.
+
 The guest fold-line setting now follows live posture for `n6-f8`, retaining
 `ONEOS_GUEST_POSTURE=flat` as an explicit opt-out. Other profiles and package
 sets keep their defaults. Runtime startup removes a previous guest's angle

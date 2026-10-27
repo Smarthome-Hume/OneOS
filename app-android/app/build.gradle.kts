@@ -40,14 +40,16 @@ val packageSets: Map<String, Pair<File, List<String>>> = linkedMapOf(
     // the CN set's files (shared by hash) and its cell broadcast module.
     "x9u-in-sultra" to (File(repoRoot, "out/overlays_x9u_in_r51") to listOf("tethering_payload.img", "OneOSWallpapersFoldGrid.apk")),
     // Pixel 11 Fold image (0.3.7), Z Fold (F8U): everything a Pixel session uses,
-    // OneOSGuest.apk included.
-    "pixel-f8u" to (File(repoRoot, "out/overlays_pixel_yogi") to listOf("tethering_payload.img")),
+    // OneOSGuest.apk included, and the fold hinge (scripts/make-fold8-pixel.py --variant f8u).
+    "pixel-f8u" to (File(repoRoot, "out/overlays_pixel_f8u") to listOf("tethering_payload.img")),
     // Pixel 11 Pro image (0.4.10), Galaxy S26 Ultra: the same files from that image.
     "pixel-sultra" to (File(repoRoot, "out/overlays_pixel_kodiak") to listOf("tethering_payload.img")),
     // Find N6 image, Galaxy Z Fold8 (0.4.14, pull request #1): the Fold's set and the Fold8 fixes
     // scripts/make-fold8-coloros.py builds from it.
     "n6-f8" to (File(repoRoot, "out/overlays_n6_fold8") to listOf("tethering_payload.img")),
     "pixel-f8" to (File(repoRoot, "out/overlays_pixel_fold8") to listOf("tethering_payload.img")),
+    // Pixel 9 Pro XL image (0.4.22), Galaxy S25 Ultra, S25, S25+ and S24 Ultra: the same files from that image.
+    "pixel9-sultra" to (File(repoRoot, "out/overlays_pixel_komodo") to listOf("tethering_payload.img")),
 )
 // Session scripts copied from switcher/assets at build time (plus the expected
 // installd table). oneos_tunnel.sh (the server tunnel) and 7zz are never shipped.
@@ -227,8 +229,8 @@ android {
         // 0.3.4: the Galaxy S25 profile, and OneOS Probe as its own app (flavor probe).
         // 0.3.5: Old stages (delete the stages Prepare moved aside).
         // 0.3.7: the Pixel 11 Fold image and its set on the Fold; the Find X9 Ultra IN image is gone.
-        versionCode = 35
-        versionName = "0.4.19-fold8-hinge3"
+        versionCode = 37
+        versionName = "0.4.22"
     }
 
     // One codebase, two apps (docs/app/DESIGN.md, 0.3.4): "full" is OneOS, the app

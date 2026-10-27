@@ -56,11 +56,11 @@ class ImagesTest {
         assertEquals(emptyList<String>(), pixel.cpuUsedByApps)
         // The Pixel images have Google services and their sessions present them; the
         // Find X9 Ultra IN build has them in the image and a launch may hide them.
-        assertEquals(listOf(xin, pixel, Images.PIXEL_KODIAK), Images.ALL.filter { it.googleServices })
-        assertEquals(listOf(pixel, Images.PIXEL_KODIAK), Images.ALL.filter { it.presentsGms })
+        assertEquals(listOf(xin, pixel, Images.PIXEL_KODIAK, Images.PIXEL_KOMODO), Images.ALL.filter { it.googleServices })
+        assertEquals(listOf(pixel, Images.PIXEL_KODIAK, Images.PIXEL_KOMODO), Images.ALL.filter { it.presentsGms })
         assertEquals(listOf(xin), Images.ALL.filter { it.gmsHideable })
         assertTrue(pixel.copy(presentsGms = false).gmsHideable)
-        assertEquals(listOf(n6, x9u, xin, pixel, Images.PIXEL_KODIAK), Images.ALL)
+        assertEquals(listOf(n6, x9u, xin, pixel, Images.PIXEL_KODIAK, Images.PIXEL_KOMODO), Images.ALL)
         // 0.4.11: the Find X9 Ultra IN build is back (0.3.3-0.3.6, dropped in 0.3.7), the same file.
         assertEquals("coloros17-findx9u-in", xin.id)
         assertEquals("OneOS_ColorOS17_FindX9Ultra_IN.img.gz", xin.gzName)
@@ -78,8 +78,11 @@ class ImagesTest {
         assertEquals("Find X8 Ultra", Images.shortName(old.id, retired = listOf(old)))
         assertEquals("Find N6", Images.shortName(n6.id))
         assertEquals("not-an-image", Images.shortName("not-an-image"))
-        // Guest data stays with its own system (0.3.7): the ColorOS builds and the Pixel image.
-        assertEquals(listOf(SystemFamily.COLOROS, SystemFamily.COLOROS, SystemFamily.COLOROS, SystemFamily.PIXEL, SystemFamily.PIXEL), Images.ALL.map { it.family })
+        // Guest data stays with its own system (0.3.7): the ColorOS builds and the Pixel images.
+        assertEquals(listOf(SystemFamily.COLOROS, SystemFamily.COLOROS, SystemFamily.COLOROS, SystemFamily.PIXEL, SystemFamily.PIXEL, SystemFamily.PIXEL), Images.ALL.map { it.family })
+        // The Pixel 9 Pro XL image (0.4.22) needs no SVE, unlike the Pixel 11 builds.
+        assertEquals(emptyList<String>(), Images.PIXEL_KOMODO.cpuRequired)
+        assertEquals(listOf("sve", "sve2"), Images.PIXEL_KODIAK.cpuRequired)
         for (i in Images.ALL) assertEquals(i.id, i.id.startsWith("coloros17-"), i.family == SystemFamily.COLOROS)
 
         for (i in Images.ALL) {
@@ -182,13 +185,14 @@ class ImagesTest {
         val takes = mapOf(
             Profiles.F8U to listOf(n6, pixel),
             Profiles.S_ULTRA_8850 to listOf(xin, x9u, Images.PIXEL_KODIAK),
-            Profiles.S_ULTRA_8750 to listOf(xin, x9u),
-            Profiles.S_8750 to listOf(xin, x9u),
+            // 0.4.22: the Pixel 9 Pro XL image on the phones without SVE.
+            Profiles.S_ULTRA_8750 to listOf(xin, x9u, Images.PIXEL_KOMODO),
+            Profiles.S_8750 to listOf(xin, x9u, Images.PIXEL_KOMODO),
             Profiles.FOLD7 to listOf(n6),
-            Profiles.S_PLUS_8750 to listOf(xin, x9u),
+            Profiles.S_PLUS_8750 to listOf(xin, x9u, Images.PIXEL_KOMODO),
             Profiles.FOLD8 to listOf(n6, pixel),
             Profiles.S_8850 to listOf(xin, x9u, Images.PIXEL_KODIAK),
-            Profiles.S_ULTRA_8650 to listOf(xin, x9u),
+            Profiles.S_ULTRA_8650 to listOf(xin, x9u, Images.PIXEL_KOMODO),
             Profiles.S_8550 to listOf(xin, x9u),
             Profiles.S_PLUS_8850 to listOf(xin, x9u, Images.PIXEL_KODIAK),
             Profiles.S_PLUS_9965 to listOf(xin, x9u, Images.PIXEL_KODIAK),

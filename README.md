@@ -38,7 +38,7 @@ WeWaffles, and builds its guest images with
 
 ## Status
 
-App version 0.4.17. Samsung flagships with Snapdragon, plus the first two
+App version 0.4.22. Samsung flagships with Snapdragon, plus the first two
 Exynos phones; root is required (tested with KernelSU; Magisk and APatch are
 detected but untested).
 
@@ -51,8 +51,9 @@ detected but untested).
 Untested profiles, where the app asks you to tick that you know before
 switching: Galaxy Z Fold8 (SM-F971) and Z Fold7 (SM-F966), Galaxy S26+ (SM-S947),
 S26 (SM-S942, SC-51G), S25+ (SM-S936) and S24 Ultra (SM-S928) with ColorOS; the
-Pixel 11 Fold image on the Z Fold8, and the Pixel 11 Pro image on the Galaxy S26
-Ultra, S26+ and S26; and on every Galaxy S phone above, the Find X9 Ultra IN (global) build
+Pixel 11 Fold image on the Z Fold8, the Pixel 11 Pro image on the Galaxy S26
+Ultra, S26+ and S26, and the Pixel 9 Pro XL image on the Galaxy S25 Ultra, S25,
+S25+ and S24 Ultra (the Pixel 11 images need a newer CPU); and on every Galaxy S phone above, the Find X9 Ultra IN (global) build
 of ColorOS 17, with Google Play and the Play Store. Galaxy S23 (SM-S911) and
 S23+ (SM-S916) are accepted for testing only:
 their vendor software is too old and the system will most likely not start
@@ -204,6 +205,12 @@ OneLineage-derived session scripts (published with WeWaffles' permission). See
   (phh) and contributors.
 - **[OneUIProject](https://github.com/OneUIProject)**: SESL, oneui-design and
   oneui-icons (MIT) give the app its One UI look.
+- **[Josh Skinner (@thatjoshguy67)](https://github.com/thatjoshguy67)**: Galaxy
+  Z Fold8 support ([pull request #1](https://github.com/fahadalijaved23/OneOS/pull/1)):
+  the Fold8's Find N6 ColorOS set, its cover display, Quick Settings, AOD, widgets,
+  Pocket Studio and Google fixes, and Samsung's hinge sensor for half-folded
+  postures and the open/close animations in ColorOS and Pixel, which the Z Fold8
+  Ultra uses too.
 - smali/dexlib2, AndroidX, Kotlin, Guava, ZXing and others: the full list with
   licenses is in [CREDITS.md](CREDITS.md).
 

@@ -29,7 +29,7 @@ class PackageSetsTest {
     fun setsAsData() {
         assertEquals(25, n6.files.size)
         assertEquals(24, x9u.files.size)
-        assertEquals(31, pixel.files.size)
+        assertEquals(34, pixel.files.size)
         assertEquals(Images.ID_FIND_N6, n6.imageId)
         assertEquals(Images.ID_FIND_X9U, x9u.imageId)
         assertEquals(Images.ID_PIXEL_YOGI, pixel.imageId)
@@ -37,8 +37,8 @@ class PackageSetsTest {
         assertEquals("out/overlays_x9u_r50", x9u.sourceDir)
         assertEquals("out/overlays_x9u_in_r51", xin.sourceDir)
         assertEquals(Images.ID_FIND_X9U_IN, xin.imageId)
-        assertEquals("out/overlays_pixel_yogi", pixel.sourceDir)
-        assertEquals(listOf(n6, x9u, xin, pixel, PackageSets.PIXEL_SULTRA, PackageSets.N6_F8, PackageSets.PIXEL_F8), PackageSets.ALL)
+        assertEquals("out/overlays_pixel_f8u", pixel.sourceDir)
+        assertEquals(listOf(n6, x9u, xin, pixel, PackageSets.PIXEL_SULTRA, PackageSets.N6_F8, PackageSets.PIXEL_F8, PackageSets.PIXEL9_SULTRA), PackageSets.ALL)
         // The Z Fold8's Find N6 set (0.4.14, pull request #1): the Fold's files and five Fold8 fixes.
         val f8 = PackageSets.N6_F8
         assertEquals(Images.ID_FIND_N6, f8.imageId)
@@ -52,6 +52,21 @@ class PackageSetsTest {
         val fold = ShaList.parse(shas(n6)).entries
         val fold8 = ShaList.parse(shas(f8)).entries
         for ((name, hash) in fold) assertEquals(name, hash, fold8[name])
+        // The Pixel Fold sets (pull request #1, the F8U's since 0.4.21): the Pixel files, the patched
+        // SystemUI, the angle relay and each one's unfold RRO; the S26 Ultra's set has none of them.
+        val hinge = listOf("Fold8PixelSystemUI.apk", "Fold8AngleRelay.dex")
+        assertEquals(hinge + "OneOSPixelUnfold.apk", pixel.files.filter { it.role == FileRole.GUEST_FIX }.map { it.name })
+        assertEquals(hinge + "Fold8PixelUnfold.apk", PackageSets.PIXEL_F8.files.filter { it.role == FileRole.GUEST_FIX }.map { it.name })
+        assertEquals(PackageSets.PIXEL_SULTRA.files, pixel.files.filter { it.role != FileRole.GUEST_FIX })
+        assertEquals(PackageSets.PIXEL_SULTRA.files, PackageSets.PIXEL_F8.files.filter { it.role != FileRole.GUEST_FIX })
+        // The Pixel 9 Pro XL's set (0.4.22): the same files, from its own image.
+        assertEquals(PackageSets.PIXEL_SULTRA.files, PackageSets.PIXEL9_SULTRA.files)
+        assertEquals(Images.ID_PIXEL_KOMODO, PackageSets.PIXEL9_SULTRA.imageId)
+        // One SystemUI build and one relay for both: the APK packs each once.
+        val f8uSums = ShaList.parse(shas(pixel)).entries
+        val f8Sums = ShaList.parse(shas(PackageSets.PIXEL_F8)).entries
+        for (n in hinge) assertEquals(n, f8uSums[n], f8Sums[n])
+        assertEquals(fold8["Fold8AngleRelay.dex"], f8uSums["Fold8AngleRelay.dex"])
         // Owner: leave out only dead weight.
         assertEquals(listOf("tethering_payload.img"), n6.omitted)
         assertEquals(listOf("tethering_payload.img", "OneOSWallpapersFoldGrid.apk"), x9u.omitted)
@@ -145,8 +160,8 @@ class PackageSetsTest {
             assertTrue(n, n !in pixel.names)
         }
         assertTrue(pixel.hasReturnApp)
-        // The free-space gate's number is the files' total (out/overlays_pixel_yogi, 2026-10-24).
-        assertEquals(485_687_124L, pixel.approxBytes)
+        // The free-space gate's number is the files' total (out/overlays_pixel_f8u, 2026-10-26).
+        assertEquals(536_494_620L, pixel.approxBytes)
         // Each image presents its Google services exactly when its sets stage GmsCore.
         for (p in Profiles.BUILT_IN) {
             for (choice in p.choices) {
@@ -270,7 +285,7 @@ class PackageSetsTest {
         assertEquals("22.5 GB", Units.bytes(need))
         // The Pixel image is smaller: its own raw size and files.
         val pixelNeed = SpaceRule.toStage(Images.PIXEL_YOGI, pixel)
-        assertEquals(6_559_223_808L + 485_687_124L + 11L * SpaceRule.GIB, pixelNeed)
+        assertEquals(6_559_223_808L + 536_494_620L + 11L * SpaceRule.GIB, pixelNeed)
         assertEquals("18.9 GB", Units.bytes(pixelNeed))
         assertEquals(11L * SpaceRule.GIB, SpaceRule.LAUNCH_BYTES)
         assertEquals(Images.FIND_X9U.rawBytes + SpaceRule.LAUNCH_BYTES, SpaceRule.toStage(Images.FIND_X9U, null))

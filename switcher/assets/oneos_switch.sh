@@ -853,8 +853,30 @@ sleep 1
 # One UI's system_server kept Samsung's softdog (/dev/watchdog, 100 s) and is
 # gone: its magic close now, before guest_prepare.sh's feeder takes over (see
 # there; the Exynos phones panicked when nothing fed it).
-if e=$(printf V 2>&1 > /dev/watchdog); then echo "Softdog: /dev/watchdog closed with V (One UI's system_server stopped)"
+SOFTDOG_V=0
+if e=$(printf V 2>&1 > /dev/watchdog); then echo "Softdog: /dev/watchdog closed with V (One UI's system_server stopped)"; SOFTDOG_V=1
 else echo "Softdog: /dev/watchdog not written ($e)"; fi
+# The Exynos phones (S26+ 756047eb, Z Flip7 aaeea148, both 0.4.20) still
+# panicked, "Software Watchdog Timer expired 100s" about 100 s after One UI's
+# system_server stopped: /dev/watchdog is busy there (init's watchdogd) and
+# neither has /dev/softdog, which 0.4.20 fed. Samsung's init owns the softdog
+# (init.sysfw.rc: softdog init / settimeout 100 / disable): it disables it when
+# zygote stops, which fired on both (resetreason restarted) and still did not
+# hold, most likely because One UI's system_server kicked it again before it
+# died. Its own off switch, persist.vendor.softdog=off ("softdog disable";
+# Samsung sets it on unlocked and GSI phones, and One UI's system_server then
+# leaves the softdog alone), now that system_server is gone. Only where the "V"
+# above could not reach it; the snapshot taken before the switch puts the
+# property back on the return (restore-persist), and after a hard reset too
+# (recover).
+if [ "$SOFTDOG_V" = 0 ] && grep -q '^on property:persist\.vendor\.softdog=off' /system/etc/init/init.sysfw.rc 2>/dev/null; then
+    sd=$(getprop persist.vendor.softdog)
+    if [ "$sd" = off ]; then echo "Softdog: persist.vendor.softdog already off"
+    else
+        setprop persist.vendor.softdog off
+        echo "Softdog: persist.vendor.softdog off for the session (was ${sd:-unset}): Samsung's init disables its software watchdog"
+    fi
+fi
 echo "After the stop: CPU max/hw kHz: $(cpu_caps); skin: $(skin_temp)"
 
 # --- MOUNT PREPARATION ---
@@ -1154,11 +1176,16 @@ esac
 [ "$GUEST_DENSITY" = "${ONEOS_GUEST_DENSITY:-auto}" ] || echo "ONEOS_GUEST_DENSITY=$ONEOS_GUEST_DENSITY is not off, auto or 120-640: auto"
 # ONEOS_GUEST_POSTURE=live: the fold line's posture follows the guest's hinge
 # state instead of always flat.
+# Live by default with the hinge sets of pull request #1 (Fold8) and the Fold8 Ultra's.
 POSTURE_DEFAULT=flat
-if [ "${ONEOS_PROFILE:-}" = f8 ] && [ "$GUEST_OPLUS" = 1 ] && grep -q '^  "set": "n6-f8",$' "$STAGE/.oneos_stage"; then
-    POSTURE_DEFAULT=live
-fi
-if [ "${ONEOS_PROFILE:-}" = f8 ] && [ "$GUEST_OPLUS" = 0 ] && grep -q '^  "set": "pixel-f8",$' "$STAGE/.oneos_stage"; then
+case "${ONEOS_PROFILE:-}:$GUEST_OPLUS" in
+    f8:1) HINGE_SET=n6-f8 ;;
+    f8:0) HINGE_SET=pixel-f8 ;;
+    f8u:1) HINGE_SET=n6-f8u ;;
+    f8u:0) HINGE_SET=pixel-f8u ;;
+    *) HINGE_SET="" ;;
+esac
+if [ -n "$HINGE_SET" ] && grep -q "^  \"set\": \"$HINGE_SET\",\$" "$STAGE/.oneos_stage"; then
     POSTURE_DEFAULT=live
 fi
 GUEST_POSTURE_LIVE=0; [ "${ONEOS_GUEST_POSTURE:-$POSTURE_DEFAULT}" = live ] && GUEST_POSTURE_LIVE=1
@@ -1605,8 +1632,9 @@ while true; do
                 $BB nsenter -t \$PID -m /system/bin/sh /data/oneos_genv.sh /system/bin/sh /data/oneos_fold8/runtime.sh runtime >\"$STAGE/fold8_runtime.log\" 2>&1 || echo '[UI Activator] Fold8 runtime setup failed; see fold8_runtime.log'
             fi
 
-            # Pixel Fold8: start the system-UID sensor reader in the guest namespace.
-            if [ \"${ONEOS_PROFILE:-}\" = f8 ] && grep -q 'pixel-f8' \"$STAGE/.oneos_stage\" && [ -f \"$STAGE/data/oneos_pixel_hinge/runtime.sh\" ]; then
+            # Pixel Fold8 / Fold8 Ultra: start the system-UID sensor reader in the guest namespace
+            # (fold8_pixel.sh prepare made runtime.sh only for those two sets).
+            if { [ \"${ONEOS_PROFILE:-}\" = f8 ] || [ \"${ONEOS_PROFILE:-}\" = f8u ]; } && grep -q '\"set\": \"pixel-f8u\\{0,1\\}\",' \"$STAGE/.oneos_stage\" && [ -f \"$STAGE/data/oneos_pixel_hinge/runtime.sh\" ]; then
                 $BB nsenter -t \$PID -m /system/bin/sh /data/oneos_genv.sh /system/bin/sh /data/oneos_pixel_hinge/runtime.sh runtime >\"$STAGE/pixel_hinge_runtime.log\" 2>&1 || echo '[UI Activator] Pixel hinge relay unavailable; native sensor fallback active'
             fi
 

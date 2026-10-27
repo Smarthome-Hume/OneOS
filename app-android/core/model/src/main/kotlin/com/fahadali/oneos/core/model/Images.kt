@@ -107,6 +107,7 @@ object Images {
     const val ID_FIND_X9U_IN = "coloros17-findx9u-in"
     const val ID_PIXEL_YOGI = "pixel11fold-yogi"
     const val ID_PIXEL_KODIAK = "pixel11pro-kodiak"
+    const val ID_PIXEL_KOMODO = "pixel9proxl-komodo"
 
     /** Where root stages the unpacked image. */
     const val STAGE_NAME = "system.raw"
@@ -261,7 +262,42 @@ object Images {
         family = SystemFamily.PIXEL,
     )
 
-    val ALL: List<ImageRef> = listOf(FIND_N6, FIND_X9U, FIND_X9U_IN, PIXEL_YOGI, PIXEL_KODIAK)
+    /**
+     * Google's Pixel 9 Pro XL system (komodo, `google/komodo/komodo:17/CP3A.261005.005`),
+     * from 0.4.22 for the phones without SVE (Galaxy S25 Ultra, S25, S25+, S24
+     * Ultra): the factory image (owner's link), MysticGSI `--type pixel
+     * --no-debloat`, then Pixel Camera, PixelCameraServices, PixelDisplayService
+     * and grilservice removed, as for the Pixel 11 images. Disassembly
+     * (llvm-objdump, 2026-10-26) finds no SVE in libutils, libbinder, libhwui,
+     * libgui, libandroid_runtime, init, surfaceflinger, servicemanager,
+     * app_process64 or the boot image; the loader's only SVE (two cntd, which
+     * MysticGSI's build warning names) is in compiler-rt's SME state routines,
+     * behind the CPU feature bit. No app or library scan beyond those. Untested.
+     */
+    val PIXEL_KOMODO = ImageRef(
+        id = ID_PIXEL_KOMODO,
+        label = "Pixel 9 Pro XL, komodo build",
+        shortName = "Pixel 9 Pro XL",
+        name = "Pixel 9 Pro XL",
+        variant = null,
+        blurb = "Google's system from the Pixel 9 Pro XL, with Google Play and Google's apps.",
+        downloadUrl = SHARED_FOLDER_URL,
+        sdk = 37,
+        buildId = "CP3A.261005.005",
+        gzName = "OneOS_Pixel9ProXL_Full_S25U.img.gz",
+        gzBytes = 2_925_465_896L,
+        gzSha256 = "b49a3f8e8825241083d564c6e49118e59049f5bc887443e19411909e6d770266",
+        rawBytes = 5_837_496_320L,
+        rawSha256 = "2ef2dfe164dc6cac44c574696da474e71a01d9a769eda9c1a265d018c1d45a5c",
+        testedOn = null,
+        cpuRequired = emptyList(),
+        cpuUsedByApps = emptyList(),
+        googleServices = true,
+        presentsGms = true,
+        family = SystemFamily.PIXEL,
+    )
+
+    val ALL: List<ImageRef> = listOf(FIND_N6, FIND_X9U, FIND_X9U_IN, PIXEL_YOGI, PIXEL_KODIAK, PIXEL_KOMODO)
 
     fun byId(id: String, images: List<ImageRef> = ALL): ImageRef? = images.firstOrNull { it.id == id }
 

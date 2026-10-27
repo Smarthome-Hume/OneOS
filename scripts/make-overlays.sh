@@ -84,6 +84,18 @@ BUILDS = [
         "service.incremental.so": "3add0c259ba1e76378359d556d792136f96ce75197c99ff9d3d7fe850d8e4a92",
         "crashrecovery-google.apex": "8ae8917117e528bc876f8658633a65ed370b32ac1f8b77180909a94a5d1f87b9",
     }, [("vold", 0xde11, NAME), ("vold", 0x64ac8, TRY_START), ("service.incremental.so", 0x64128, NAME)]),
+    # The Pixel 9 Pro XL (komodo) image, CP3A.261005.005: the same code at other
+    # offsets. start() takes the string at 0xdbcb (adrp 0x653f0 + add 0x653f4; the
+    # other 9 references are umount/remountStorageDirs log tags), try_start's tbz
+    # on isDeclared() is at +0x68 (0x64db8), service.incremental.so has both
+    # lookups (adr 0xc0f7c, adrp + add 0xc3870 with String16(s, 4)) on the string
+    # at 0x64328. Its crashrecovery APEX (compressed) has the same
+    # RescueParty.isDisabled() as yogi's.
+    ("Pixel 17 (komodo)", {
+        "vold": "498c6d86fb7232e1b7d486ac6202672aab60837dd1e665bfc303ba14ff31c16a",
+        "service.incremental.so": "b519753a86b5389434b170434913e8216c263de73606dd368d1098b04d583e9c",
+        "crashrecovery-google.apex": "4c47853948d58166facca39a6b58d00bf47302e38b6e8a8989c622a0e15c6521",
+    }, [("vold", 0xdbca, NAME), ("vold", 0x64db8, TRY_START), ("service.incremental.so", 0x64327, NAME)]),
     ("ColorOS 17 CP2A.260605.016 (Find N6, Find X9 Ultra)", {
         "vold": "3df4d13bb9636cb9833a6ee2027d189c6acfd25b0404058ca130afb164a55896",
         "service.incremental.so": "43ae83091df41f9cd43fa985e7b629e09ba9f581d93336d0efb38dd05de1bab8",
@@ -195,7 +207,27 @@ else
     KEY_DIRS="$KEY_DIRS $(python3 -I "$ROOT/switcher/patches/guest_blur_no_thermal.py" "$WORK/services")"
     echo "Window blur: not turned off by heat (BlurController.updateBlurEnabled)"
 fi
-java -jar "$APKTOOL" b -q -o "$WORK/rebuilt.jar" "$WORK/services"
+# A dex the added OneOS classes push past 65536 method references (the Pixel 9
+# Pro XL's classes2: 65568) gets them moved to a dex of their own after the
+# last one: one jar, one class loader, so they keep their package access.
+# Builds that fit are unchanged.
+if ! java -jar "$APKTOOL" b -q -o "$WORK/rebuilt.jar" "$WORK/services" 2> "$WORK/apktool.err"; then
+    FULL=$(sed -n 's/.*Could not smali folder: \(smali[_a-z0-9]*\).*/\1/p' "$WORK/apktool.err" | head -1)
+    if [ -z "$FULL" ] || ! grep -q 'Unsigned short value out of range' "$WORK/apktool.err" ||
+       [ -z "$(cd "$WORK/services/$FULL" && find . -name 'OneOS*.smali')" ]; then
+        cat "$WORK/apktool.err" >&2
+        exit 1
+    fi
+    LAST=$(ls -d "$WORK"/services/smali_classes* 2>/dev/null | sed 's/.*smali_classes//' | sort -n | tail -1)
+    OWN="smali_classes$((${LAST:-1} + 1))"
+    (cd "$WORK/services/$FULL" && find . -name 'OneOS*.smali') | while read -r f; do
+        mkdir -p "$WORK/services/$OWN/$(dirname "$f")"
+        mv "$WORK/services/$FULL/$f" "$WORK/services/$OWN/$f"
+        echo "services.jar: $FULL is past 65536 method references, $f moved to $OWN"
+    done
+    java -jar "$APKTOOL" b -q -o "$WORK/rebuilt.jar" "$WORK/services"
+    KEY_DIRS="$KEY_DIRS $OWN"
+fi
 cp "$WORK/services.jar" "$OUT/services_patched.jar"
 for d in $(printf '%s\n' "$DISPLAY_DIR" $KEY_DIRS | sort -u); do
     DEX="$(echo "$d" | sed 's/^smali_//; s/^smali$/classes/').dex"

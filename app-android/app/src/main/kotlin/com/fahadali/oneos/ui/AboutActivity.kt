@@ -31,6 +31,10 @@ class AboutFragment : PreferenceFragmentCompat() {
             openInBrowser(getString(R.string.about_credit_onelineage_url))
             true
         }
+        findPreference<Preference>("credit_fold8")?.setOnPreferenceClickListener {
+            openInBrowser(getString(R.string.about_credit_fold8_url))
+            true
+        }
     }
 
     /** Hands the link to the browser; the app itself has no INTERNET permission. */

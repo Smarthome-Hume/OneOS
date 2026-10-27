@@ -146,7 +146,7 @@ class StageAuditTest {
         // The sets' files (SET_COMMON for the ColorOS sets, SET_PIXEL for the Pixel set) and the image each was built from.
         val common = shVar("SET_COMMON").split(' ')
         assertEquals(PackageSets.X9U_SULTRA.names.toSet(), common.toSet())
-        assertEquals(PackageSets.PIXEL_F8U.names.toSet(), shVar("SET_PIXEL").split(' ').toSet())
+        assertEquals(PackageSets.PIXEL_SULTRA.names.toSet(), shVar("SET_PIXEL").split(' ').toSet())
         val setFiles = Regex("""^\s+([a-z0-9-]+)\) echo "\${'$'}(SET_[A-Z]+)([^"]*)" ;;$""", RegexOption.MULTILINE)
             .findAll(script).associate { it.groupValues[1] to (shVar(it.groupValues[2]).split(' ') + it.groupValues[3].split(' ').filter { n -> n.isNotEmpty() }) }
         assertEquals(PackageSets.ALL.map { it.id }.toSet(), setFiles.keys)

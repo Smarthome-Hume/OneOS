@@ -38,6 +38,11 @@
             android:key="credit_onelineage"
             android:summary="@string/about_credit_onelineage_url"
             android:title="@string/about_credit_onelineage_title" />
+        <!-- Pull request #1; tap opens it. -->
+        <Preference
+            android:key="credit_fold8"
+            android:summary="@string/about_credit_fold8_summary"
+            android:title="@string/about_credit_fold8_title" />
         <Preference
             android:selectable="false"
             android:summary="@string/about_credit_oneui_summary"

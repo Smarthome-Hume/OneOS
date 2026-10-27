@@ -56,7 +56,10 @@ class Fold8Tests(unittest.TestCase):
             (tools / 'chown').chmod(0o755)
             cases = [
                 ('f8', 'coloros17-findn6', 'n6-f8', '', [0, 1, 2, 3]),
-                ('f8u', 'coloros17-findn6', 'n6-f8u', '', []),
+                ('f8u', 'coloros17-findn6', 'n6-f8u', '', [0, 1, 2, 3]),
+                ('f8u', 'coloros17-findn6', 'n6-f8', '', []),
+                ('f8', 'coloros17-findn6', 'n6-f8u', '', []),
+                ('f8u', 'pixel11fold-yogi', 'pixel-f8u', '', []),
                 ('f8', 'pixel11fold-yogi', 'pixel-f8', '', []),
                 ('f8', 'coloros17-findn6', 'n6-f8', 'vendor', []),
                 ('f8', 'coloros17-findn6', 'n6-f8', 'oneos', [0, 3]),

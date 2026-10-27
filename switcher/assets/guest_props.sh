@@ -449,6 +449,25 @@ add)
                 echo "guest_props: $key='$g' for the session (One UI: $h; the guest has no 32-bit zygote)"
         done
     fi
+    # A Qualcomm-built guest on an Exynos phone (Galaxy S26+, 4cad07e6, 0.4.19).
+    # ColorOS's zygote preloads libqti_performance.so only when
+    # Build.IS_QCOM_PLATFORM is true, which framework.jar computes from
+    # ro.boot.hardware starting with "qcom" (ZygoteInit.preloadSharedLibraries).
+    # On the S26+ (ro.boot.hardware is Samsung's) nothing loaded it, every
+    # com.qualcomm.qti.Performance native was "No implementation found" (over
+    # 1,000 lines a session) and a game-launch broadcast dispatched on an OThread
+    # took system_server down with UnsatisfiedLinkError: black screen after a
+    # few seconds, then the return. QPerformance.jar is in the guest's boot image,
+    # so it cannot be patched; the image's own value for the session instead,
+    # whenever the guest ships that library and the phone is not Qualcomm's.
+    if [ -f "$ROOTFS/system/system_ext/lib64/libqti_performance.so" ]; then
+        h=$(getprop ro.boot.hardware)
+        case "$h" in
+            qcom*) ;;
+            *) echo "ro.boot.hardware=$h" >> "$OVR" && "$RP" -n ro.boot.hardware qcom 2>/dev/null &&
+                   echo "guest_props: ro.boot.hardware=qcom for the session (One UI: $h; the guest's zygote then preloads its Qualcomm perf library)" ;;
+        esac
+    fi
     # No isolated compilation from the guest. SystemServer starts
     # IsolatedCompilationService when ro.config.isolated_compilation_enabled is
     # true (One UI: true); it schedules compiles in the HOST's composd (One UI's
@@ -617,6 +636,8 @@ restore-persist)
         case "$1" in
             persist.sys.locale) return 0 ;;
             persist.oplus.*|persist.sys.oplus.*) return 0 ;;
+            # oneos_switch.sh's softdog off switch on the Exynos phones (0.4.22).
+            persist.vendor.softdog) return 0 ;;
         esac
         return 1
     }

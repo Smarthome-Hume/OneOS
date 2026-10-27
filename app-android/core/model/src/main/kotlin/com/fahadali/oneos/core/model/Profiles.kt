@@ -121,6 +121,13 @@ object Profiles {
         ImageChoice(Images.ID_FIND_X9U, PackageSets.ID_X9U_SULTRA, tested = true),
     )
 
+    /**
+     * 0.4.22: the Pixel 9 Pro XL image on the phones without SVE (SM8750, SM8650),
+     * untested. Its system code has none (the Pixel 11 images need it), so these
+     * phones get a Pixel too.
+     */
+    private val PIXEL9_CHOICE = ImageChoice(Images.ID_PIXEL_KOMODO, PackageSets.ID_PIXEL9_SULTRA, tested = false)
+
     private fun olderVendor(vendorApi: String, kernel: String) = Finding(
         ID_NOTE_OLDER_VENDOR, Level.WARN, "Older vendor software",
         "This phone has vendor API $vendorApi and kernel $kernel; the other systems' display path has only run on " +
@@ -207,7 +214,7 @@ object Profiles {
         form = FormFactor.BAR,
         // Off in 0.3.0 (the S26 Ultra was to go first); on from 0.3.1 (owner: the
         // friend's S25 Ultra is on Android 17 and ready). Untested: ticks as the S26 Ultra.
-        choices = S_ULTRA_CHOICES,
+        choices = S_ULTRA_CHOICES + PIXEL9_CHOICE,
         notes = listOf(OLDER_VENDOR),
     )
 
@@ -217,7 +224,7 @@ object Profiles {
      * panel, no hinge, installd table identical to switcher/patches/
      * host_installd.txt, 85 methods). Not an S Ultra, so its explicit profile
      * is what puts it in scope
-     * ([CompatEvaluator.inScope]); it takes the S Ultra image and set, untested.
+     * ([CompatEvaluator.inScope]); it takes the S Ultra images and sets, untested.
      */
     val S_8750 = PhoneProfile(
         id = ID_S_8750,
@@ -226,7 +233,7 @@ object Profiles {
         codename = "pa1q",
         socModel = "SM8750",
         form = FormFactor.BAR,
-        choices = S_ULTRA_CHOICES,
+        choices = S_ULTRA_CHOICES + PIXEL9_CHOICE,
         notes = listOf(OLDER_VENDOR),
     )
 
@@ -257,8 +264,8 @@ object Profiles {
      * Galaxy S25+, from 0.4.10: a probe report of 2026-10-25 (SM-S936B, pa2q,
      * SM8750, One UI 9.0, Android 17, vendor API 202404, one panel on port
      * 147, density 450, installd table identical to
-     * switcher/patches/host_installd.txt). The Galaxy S25's image and set,
-     * untested. No Pixel image (SVE).
+     * switcher/patches/host_installd.txt). The Galaxy S25's images and sets,
+     * untested; of the Pixel images only the Pixel 9 Pro XL's (no SVE).
      */
     val S_PLUS_8750 = PhoneProfile(
         id = ID_S_PLUS_8750,
@@ -267,7 +274,7 @@ object Profiles {
         codename = "pa2q",
         socModel = "SM8750",
         form = FormFactor.BAR,
-        choices = listOf(X9U_IN_CHOICE, ImageChoice(Images.ID_FIND_X9U, PackageSets.ID_X9U_SULTRA, tested = false)),
+        choices = listOf(X9U_IN_CHOICE, ImageChoice(Images.ID_FIND_X9U, PackageSets.ID_X9U_SULTRA, tested = false), PIXEL9_CHOICE),
         notes = listOf(OLDER_VENDOR),
     )
 
@@ -345,7 +352,8 @@ object Profiles {
      * Galaxy S24 Ultra, from 0.4.11: a probe report of 2026-10-25 (SM-S928B,
      * e3q, SM8650, One UI 9.0, Android 17, vendor API 34, kernel 6.1, one
      * panel on port 147, density 450, no SVE or SME, installd 85 methods).
-     * The S Ultra's image and set, untested. No Pixel image (SVE).
+     * The S Ultra's images and sets, untested; of the Pixel images only the
+     * Pixel 9 Pro XL's (no SVE).
      */
     val S_ULTRA_8650 = PhoneProfile(
         id = ID_S_ULTRA_8650,
@@ -354,7 +362,7 @@ object Profiles {
         codename = "e3q",
         socModel = "SM8650",
         form = FormFactor.BAR,
-        choices = listOf(X9U_IN_CHOICE, ImageChoice(Images.ID_FIND_X9U, PackageSets.ID_X9U_SULTRA, tested = false)),
+        choices = listOf(X9U_IN_CHOICE, ImageChoice(Images.ID_FIND_X9U, PackageSets.ID_X9U_SULTRA, tested = false), PIXEL9_CHOICE),
         notes = listOf(olderVendor("34 (Android 14)", "6.1")),
     )
 

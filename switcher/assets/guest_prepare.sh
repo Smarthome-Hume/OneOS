@@ -155,6 +155,20 @@ echo "=== 1. Ensuring Watchdog Feeder is Active ==="
 # if this loop ever ends. Every change between written and refused goes to
 # watchdog_feeder.log with the device's holders. A feeder of an older build
 # (echo -n 1) is replaced.
+# The S26+ (4cad07e6, 0.4.19) panicked the same way with that feeder running:
+# on this phone /dev/watchdog is the hardware watchdog, held and fed by init's
+# watchdogd the whole time (the feeder's writes were refused, EBUSY), and
+# Samsung's "Software Watchdog Timer" is a second node, /dev/softdog, which
+# One UI's system_server feeds and the community "Watchdog Feeder" module for
+# OneLineage writes "1" to every 5 s (it waits for vendor.hotboot.rom=1, which
+# OneOS never sets). The panic came 100 s after the guest's system_server
+# died. 0.4.20 wrote "1" to /dev/softdog, but neither the S26+ nor the Z Flip7
+# has that node (756047eb, aaeea148: both panicked again); oneos_switch.sh now
+# turns the softdog off through Samsung's init (persist.vendor.softdog=off).
+# The feeder kicks only watchdogs the kernel lists as active software ones
+# (/sys/class/watchdog: identity "Software Watchdog"; never a hardware one it
+# might start), and logs every watchdog node, its state and time left (every
+# change, at most every 10 s), so the next Exynos session shows which one runs.
 pkill -f 'echo -n 1 > /dev/watchdog' 2>/dev/null
 if ! ps -ef | grep -v grep | grep -q "oneos_wdog_feeder.sh"; then
     echo "Starting watchdog feeder..."
@@ -162,15 +176,41 @@ if ! ps -ef | grep -v grep | grep -q "oneos_wdog_feeder.sh"; then
 L=/data/local/tmp/oneos/watchdog_feeder.log
 holders() {
     for p in /proc/[0-9]*; do
-        ls -l "$p/fd" 2>/dev/null | grep -q '/dev/watchdog' && printf ' %s:%s' "${p#/proc/}" "$(cat "$p/comm" 2>/dev/null)"
+        ls -l "$p/fd" 2>/dev/null | grep -q '/dev/watchdog\|/dev/softdog' && printf ' %s:%s' "${p#/proc/}" "$(cat "$p/comm" 2>/dev/null)"
     done
 }
-was=''
+# Every watchdog the kernel lists: name, identity, state, timeout, time left.
+wdogs() {
+    for w in /sys/class/watchdog/watchdog*; do
+        [ -d "$w" ] || continue
+        printf ' [%s "%s" %s timeout %s left %s]' "${w##*/}" "$(cat "$w/identity" 2>/dev/null)" "$(cat "$w/state" 2>/dev/null)" \
+            "$(cat "$w/timeout" 2>/dev/null)" "$(cat "$w/timeleft" 2>/dev/null)"
+    done
+}
+{ echo "$(date +%T) nodes: $(ls -ln /dev/watchdog* /dev/softdog* 2>/dev/null | awk '{printf "%s %s:%s %s; ", $NF, $3, $4, $1}')"
+  echo "$(date +%T) persist.vendor.softdog=$(getprop persist.vendor.softdog) init.svc.watchdogd=$(getprop init.svc.watchdogd); kernel:$(wdogs)"; } >> "$L"
+was=''; n=0; seen=''
 while true; do
     if e=$(printf V 2>&1 > /dev/watchdog); then now=written; else now="refused ($e)"; fi
+    # An active software watchdog other than /dev/watchdog: kicked ("V", the
+    # magic close where the driver allows it), never started.
+    for w in /sys/class/watchdog/watchdog*; do
+        [ "$(cat "$w/state" 2>/dev/null)" = active ] || continue
+        case "$(cat "$w/identity" 2>/dev/null)" in *[Ss]oft*) ;; *) continue ;; esac
+        d=/dev/${w##*/}
+        [ -c "$d" ] || continue
+        if e=$(printf V 2>&1 > "$d"); then now="$now; $d kicked"; else now="$now; $d refused ($e)"; fi
+    done
     if [ "$now" != "$was" ]; then
         echo "$(date +%T) /dev/watchdog $now; held by:$(holders)" >> "$L"
         was=$now
+    fi
+    n=$((n + 1))
+    if [ $((n % 5)) = 0 ]; then
+        k=$(wdogs)
+        [ "$(echo "$k" | sed 's/ left [0-9]*\]/]/g')" != "$seen" ] || [ $((n % 30)) = 0 ] &&
+            echo "$(date +%T) persist.vendor.softdog=$(getprop persist.vendor.softdog); kernel:$k" >> "$L"
+        seen=$(echo "$k" | sed 's/ left [0-9]*\]/]/g')
     fi
     sleep 2
 done
@@ -741,7 +781,8 @@ fi
 # indented serializer writes whitespace there, so next() returns TEXT and the
 # saved component is skipped. Remove only whitespace between XML elements,
 # preserving every component, crop, colour, content value and wallpaper file.
-if [ "${ONEOS_PROFILE:-}" = f8 ] && [ -f "$GUEST_SYSTEM_EXT/priv-app/SystemUIGoogle/SystemUIGoogle.apk" ]; then
+# Every Pixel guest (pull request #1 found it on the Fold8; same Pixel 17 code).
+if [ -f "$GUEST_SYSTEM_EXT/priv-app/SystemUIGoogle/SystemUIGoogle.apk" ]; then
     WREL=system/users/0/wallpaper_info.xml
     no_symlink "$WREL"
     WFILE="$STAGE/data/$WREL"
@@ -771,20 +812,20 @@ s/>[[:space:]]*</></g' "$WFILE" > "$WFILE.oneos-normalized" &&
         fi
     fi
 fi
-if [ -n "$OEM_FILES" ]; then
-    # A stage copy, not a bind of host data: safe to label like a system file.
-    $BB chcon -h -R u:object_r:system_file:s0 "$STAGE/oem" 2>/dev/null || true
-    $BB mount --bind "$STAGE/oem" "$ROOTFS/oem" &&
-        echo "Bound guest /oem -> $ROOTFS/oem:$OEM_FILES"
-fi
-
-# Pixel Fold8: framework boot flags are visible to SystemUI and the launcher.
+# Pixel on the Fold8 / Fold8 Ultra: the unfold transition's boot flags, read by
+# SystemUI and the launcher at start (pixel-f8: Fold8PixelUnfold.apk, which also
+# has the Fold8's 48dp bar and AOD; pixel-f8u: OneOSPixelUnfold.apk, the gates only).
+UNFOLD_RRO=""
 if [ "${ONEOS_PROFILE:-}" = f8 ] && grep -q '^  "set": "pixel-f8",$' "$STAGE/.oneos_stage"; then
-    mkdir -p "$STAGE/oem/overlay"
-    cp "$STAGE/Fold8PixelUnfold.apk" "$STAGE/oem/overlay/"
-    chmod 755 "$STAGE/oem" "$STAGE/oem/overlay"
-    chmod 644 "$STAGE/oem/overlay/Fold8PixelUnfold.apk"
-    OEM_FILES="$OEM_FILES overlay/Fold8PixelUnfold.apk"
+    UNFOLD_RRO=Fold8PixelUnfold.apk
+elif [ "${ONEOS_PROFILE:-}" = f8u ] && grep -q '^  "set": "pixel-f8u",$' "$STAGE/.oneos_stage"; then
+    UNFOLD_RRO=OneOSPixelUnfold.apk
+fi
+if [ -n "$UNFOLD_RRO" ] && [ -f "$STAGE/$UNFOLD_RRO" ]; then
+    mkdir -p "$STAGE/oem/overlay" &&
+        cp "$STAGE/$UNFOLD_RRO" "$STAGE/oem/overlay/" &&
+        chmod 755 "$STAGE/oem" "$STAGE/oem/overlay" && chmod 644 "$STAGE/oem/overlay/$UNFOLD_RRO" &&
+        OEM_FILES="$OEM_FILES overlay/$UNFOLD_RRO"
 fi
 if [ $INJ = 1 ]; then
     mkdir -p "$STAGE/oem/overlay" &&
@@ -1405,7 +1446,11 @@ chmod 0771 "$STAGE/data/preapps-lib" 2>/dev/null || true
 DSDIR="$STAGE/data/system/devicestate"
 DS_DEFAULT=vendor
 FOLD8_COLOR_HINGE=0
-if [ "${ONEOS_PROFILE:-}" = f8 ] && grep -q '^  "set": "n6-f8",$' "$STAGE/.oneos_stage" && grep -q '^  "image": "coloros17-findn6",$' "$STAGE/.oneos_stage"; then
+# The Z Fold8 Ultra (n6-f8u) has the same lid states (0 CLOSE, 3 OPEN) and the
+# same sensor ("Folding Angle  Non-wakeup", 65686, read on SM-F976B 2026-10-26).
+if grep -q '^  "image": "coloros17-findn6",$' "$STAGE/.oneos_stage" &&
+        { { [ "${ONEOS_PROFILE:-}" = f8 ] && grep -q '^  "set": "n6-f8",$' "$STAGE/.oneos_stage"; } ||
+          { [ "${ONEOS_PROFILE:-}" = f8u ] && grep -q '^  "set": "n6-f8u",$' "$STAGE/.oneos_stage"; }; }; then
     DS_DEFAULT=fold8-hinge
     FOLD8_COLOR_HINGE=1
 fi
@@ -1413,7 +1458,7 @@ if [ "$FOLD8_COLOR_HINGE" = 1 ] && [ "${ONEOS_GUEST_DEVICE_STATES:-$DS_DEFAULT}"
     mkdir -p "$DSDIR"
     cat > "$DSDIR/device_state_configuration.xml" <<'F8DSX'
 <?xml version="1.0" encoding="utf-8"?>
-<!-- OneOS Fold8 ColorOS hinge prototype. Lid switch owns closed/open panels. -->
+<!-- OneOS Fold8 / Fold8 Ultra ColorOS hinge. Lid switch owns closed/open panels. -->
 <device-state-config>
     <device-state>
         <identifier>0</identifier><name>CLOSE</name>
@@ -1458,7 +1503,7 @@ if [ "$FOLD8_COLOR_HINGE" = 1 ] && [ "${ONEOS_GUEST_DEVICE_STATES:-$DS_DEFAULT}"
 F8DSX
     chown 1000:1000 "$DSDIR" "$DSDIR/device_state_configuration.xml"
     chmod 644 "$DSDIR/device_state_configuration.xml"
-    echo "Guest device states: Fold8 continuous hinge (0 closed, 2 half-open 15..165 degrees, 3 open)"
+    echo "Guest device states: fold hinge (0 closed, 2 half-open 15..165 degrees, 3 open)"
 elif [ "${ONEOS_GUEST_DEVICE_STATES:-$DS_DEFAULT}" = oneos ]; then
     mkdir -p "$DSDIR"
     cat > "$DSDIR/device_state_configuration.xml" <<'DSX'
@@ -2506,7 +2551,7 @@ fi
 # ONEOS_GUEST_ESIM_MANAGER=1 keeps them.
 if [ "${ONEOS_GUEST_ESIM_MANAGER:-0}" != 1 ]; then
     for d in "$ROOTFS"/system/priv-app/Euicc* "$ROOTFS"/system/app/Euicc* \
-             "$ROOTFS"/system/product/priv-app/Euicc* "$ROOTFS"/system/product/app/Euicc* \
+             "$GUEST_PRODUCT"/priv-app/Euicc* "$GUEST_PRODUCT"/app/Euicc* \
              "$GUEST_SYSTEM_EXT"/priv-app/Euicc* "$GUEST_SYSTEM_EXT"/app/Euicc* \
              "$ROOTFS"/my_*/priv-app/Euicc* "$ROOTFS"/my_*/app/Euicc*; do
         [ -d "$d" ] && [ ! -L "$d" ] || continue
@@ -2700,7 +2745,7 @@ done
 rm -f "$STAGE"/oneos_split_*.xml
 GMS_APK=0
 for a in "$ROOTFS"/my_product/priv-app/*GmsCore*/*.apk "$ROOTFS"/system/priv-app/*GmsCore*/*.apk \
-         "$ROOTFS"/system/product/priv-app/*GmsCore*/*.apk "$GUEST_SYSTEM_EXT"/priv-app/*GmsCore*/*.apk; do
+         "$GUEST_PRODUCT"/priv-app/*GmsCore*/*.apk "$GUEST_SYSTEM_EXT"/priv-app/*GmsCore*/*.apk; do
     [ -f "$a" ] && GMS_APK=1
 done
 if [ "$GMS_APK" = 0 ]; then

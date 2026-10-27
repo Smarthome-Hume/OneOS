@@ -796,6 +796,27 @@ of the session, keep the earbuds in the case and decline any pairing dialog.
 Removing a device One UI also has paired from the stage's file is a separate
 decision.
 
+## Pixel 9 Pro XL image (0.4.22, untested)
+
+The Pixel 11 images need SVE in every process (RefBase's constructor, the
+loader), which the SM8750 and SM8650 phones lack. Google's Pixel 9 Pro XL
+build (komodo, `CP3A.261005.005`, Android 17) has none in its system code:
+llvm-objdump finds no SVE in libutils, libbinder, libhwui, libgui,
+libandroid_runtime, init, surfaceflinger, servicemanager, app_process64 or
+the boot image, and the loader's two `cntd` are in compiler-rt's SME state
+routines behind the CPU feature bit. Built like the Pixel 11 Pro image
+(`--type pixel --no-debloat`, then Pixel Camera, PixelCameraServices,
+PixelDisplayService and grilservice removed); its set is `pixel9-sultra`.
+
+Its `services.jar` needed three changes: the `guest_no_new_users.py` funnel
+takes a trailing `String[]` (and a second in-process entry,
+`createProfileForUserEvenWhenDisallowed`), `WebViewZygote.getProcess()`
+returns `IZygoteProcess`, and `classes2.dex` went past 65536 method
+references with the OneOS classes, which make-overlays.sh then moves to a dex
+of their own. vold and service.incremental.so have the same code as the
+Pixel 11 builds at other offsets (make-overlays.sh), and the crashrecovery
+APEX the same `RescueParty.isDisabled()`.
+
 ## Open (not seen on a phone yet)
 
 - `/product/overlay/*__yogi__*` RROs carry the Pixel Fold's display config

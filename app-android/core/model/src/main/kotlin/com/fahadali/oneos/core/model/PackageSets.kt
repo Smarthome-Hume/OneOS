@@ -159,6 +159,7 @@ object PackageSets {
     const val ID_PIXEL_F8U = "pixel-f8u"
     const val ID_PIXEL_F8 = "pixel-f8"
     const val ID_PIXEL_SULTRA = "pixel-sultra"
+    const val ID_PIXEL9_SULTRA = "pixel9-sultra"
 
     /** Never mounted (guest_prepare.sh only keeps the host module); left out of every set. */
     const val TETHERING = "tethering_payload.img"
@@ -238,7 +239,7 @@ object PackageSets {
             "Fold8SystemUI.apk", "Fold8AngleRelay.dex", "Fold8Aod.apk", "Fold8UMS.apk", "Fold8Instant.apk",
         ).map { PackageFile(it, FileRole.GUEST_FIX) },
         omitted = listOf(TETHERING),
-        approxBytes = 662_818_414L,
+        approxBytes = 662_821_337L,
         hasReturnApp = true,
     )
 
@@ -278,7 +279,17 @@ object PackageSets {
         .map { PackageFile("${it}_payload.img", FileRole.APEX_PAYLOAD) }
 
     /**
-     * Pixel 11 Fold image, Z Fold (F8U) (0.3.7), from out/overlays_pixel_yogi:
+     * The fold hinge for a Pixel 11 Fold guest (pull request #1): Pixel's
+     * SystemUIGoogle with the adapter that reads Samsung's folding-angle sensor
+     * through the system-UID relay (fold8_pixel.sh), the relay, and an RRO
+     * turning on the unfold transition and its hinge-angle gate.
+     */
+    private fun pixelHinge(unfoldRro: String): List<PackageFile> =
+        listOf("Fold8PixelSystemUI.apk", "Fold8AngleRelay.dex", unfoldRro).map { PackageFile(it, FileRole.GUEST_FIX) }
+
+    /**
+     * Pixel 11 Fold image, Z Fold (F8U) (0.3.7), from out/overlays_pixel_f8u
+     * (out/overlays_pixel_yogi plus the hinge, scripts/make-fold8-pixel.py --variant f8u):
      * exactly what a Pixel session uses (guest_prepare.sh). Guarded:
      * services_patched.jar with the guest vold as "gvld" (vold_patched,
      * service.incremental_patched.so). The signal poll (oneos-telephony.jar,
@@ -293,10 +304,10 @@ object PackageSets {
     val PIXEL_F8U = PackageSet(
         id = ID_PIXEL_F8U,
         imageId = Images.ID_PIXEL_YOGI,
-        sourceDir = "out/overlays_pixel_yogi",
-        files = PIXEL_FILES,
+        sourceDir = "out/overlays_pixel_f8u",
+        files = PIXEL_FILES + pixelHinge("OneOSPixelUnfold.apk"),
         omitted = listOf(TETHERING),
-        approxBytes = 485_687_124L,
+        approxBytes = 536_494_620L,
         hasReturnApp = true,
     )
 
@@ -315,19 +326,35 @@ object PackageSets {
         hasReturnApp = true,
     )
 
-    /** Pixel's base payloads plus the measured Fold8 hinge adapter and boot flags. */
+    /** Pixel's base payloads plus the hinge, with the Fold8's unfold RRO (its measured 48dp bar and AOD too). */
     val PIXEL_F8 = PackageSet(
         id = ID_PIXEL_F8,
         imageId = Images.ID_PIXEL_YOGI,
         sourceDir = "out/overlays_pixel_fold8",
-        files = PIXEL_F8U.files + listOf("Fold8PixelSystemUI.apk", "Fold8AngleRelay.dex", "Fold8PixelUnfold.apk")
-            .map { PackageFile(it, FileRole.GUEST_FIX) },
+        files = PIXEL_FILES + pixelHinge("Fold8PixelUnfold.apk"),
         omitted = listOf(TETHERING),
-        approxBytes = PIXEL_F8U.approxBytes + 50_800_000L,
+        approxBytes = 536_494_620L,
         hasReturnApp = true,
     )
 
-    val ALL: List<PackageSet> = listOf(N6_F8U, X9U_SULTRA, X9U_IN_SULTRA, PIXEL_F8U, PIXEL_SULTRA, N6_F8, PIXEL_F8)
+    /**
+     * Pixel 9 Pro XL image, Galaxy S25 Ultra, S25, S25+ and S24 Ultra (0.4.22), from
+     * out/overlays_pixel_komodo: the Pixel set's files, built from that image (all
+     * the guards, the guest vold as gvld, the signal poll, the status bar padding
+     * RRO, GmsCore). Its services.jar keeps the OneOS classes in a dex of their
+     * own (scripts/make-overlays.sh: classes2 was past 65536 method references).
+     */
+    val PIXEL9_SULTRA = PackageSet(
+        id = ID_PIXEL9_SULTRA,
+        imageId = Images.ID_PIXEL_KOMODO,
+        sourceDir = "out/overlays_pixel_komodo",
+        files = PIXEL_FILES,
+        omitted = listOf(TETHERING),
+        approxBytes = 490_870_923L,
+        hasReturnApp = true,
+    )
+
+    val ALL: List<PackageSet> = listOf(N6_F8U, X9U_SULTRA, X9U_IN_SULTRA, PIXEL_F8U, PIXEL_SULTRA, N6_F8, PIXEL_F8, PIXEL9_SULTRA)
 
     fun byId(id: String, sets: List<PackageSet> = ALL): PackageSet? = sets.firstOrNull { it.id == id }
 }

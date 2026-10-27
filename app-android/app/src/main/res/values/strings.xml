@@ -113,6 +113,9 @@
     <string name="about_credit_oneos_summary">The app, the framework patches and the server build. The session scripts started from the project credited below.</string>
     <string name="about_credit_onelineage_title">OneLineage</string>
     <string name="about_credit_onelineage_url" translatable="false">https://github.com/WeWaffles/OneLineage</string>
+    <string name="about_credit_fold8_title">Galaxy Z Fold8 support</string>
+    <string name="about_credit_fold8_summary">Josh Skinner (thatjoshguy67): the Fold8 sets and the hinge, with half-folded apps and the fold animations in ColorOS and Pixel on the Fold8 and Fold8 Ultra.</string>
+    <string name="about_credit_fold8_url" translatable="false">https://github.com/fahadalijaved23/OneOS/pull/1</string>
     <string name="about_no_browser">No browser found to open the link</string>
     <string name="about_credit_oneui_title">One UI Design and SESL libraries</string>
     <string name="about_credit_oneui_summary">OneUIProject, MIT License.</string>
