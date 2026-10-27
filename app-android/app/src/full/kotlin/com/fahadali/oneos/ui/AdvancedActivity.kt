@@ -68,6 +68,10 @@ class AdvancedFragment : CardsFragment() {
         // Sessions.
         val sessions = Cards.section(column, getString(R.string.advanced_card_sessions), rows = true)
         Cards.row(sessions, R.drawable.ic_oneos_row_last_time, getString(R.string.last_title), lastSummary(), open(LastSessionActivity::class.java))
+        // Read by every launch (LaunchJob), from Home or the Switch screen.
+        CardRows.toggle(sessions, getString(R.string.advanced_heat_cap_title), getString(R.string.advanced_heat_cap_summary), SessionPrefs.heatCap(ctx)) { on ->
+            SessionPrefs.setHeatCap(ctx, on)
+        }
         val logs = LogJob.state
         val zip = LogJob.latestZip(ctx)
         if (zip != null && !logs.busy) {

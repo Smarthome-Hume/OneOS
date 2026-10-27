@@ -173,6 +173,8 @@ fi
 # staged. guest_prepare.sh checks both again, with the guards and the stage's
 # app ids, but only after One UI's framework is stopped.
 case "${ONEOS_GUEST_GMS:-1}" in 0|1) ;; *) refuse "ONEOS_GUEST_GMS=$ONEOS_GUEST_GMS (0 or 1)" ;; esac
+# Cool down when hot (the heat cap below): 0 or 1, unset meaning 1.
+case "${ONEOS_HEAT_CAP:-1}" in 0|1) ;; *) refuse "ONEOS_HEAT_CAP=$ONEOS_HEAT_CAP (0 or 1)" ;; esac
 [ "${ONEOS_GUEST_GMS:-1}" = 1 ] && [ "${ONEOS_GUEST_HIDE_GMS:-0}" = 1 ] && [ -f "$STAGE/gmssystem_payload.img" ] &&
     refuse "ONEOS_GUEST_GMS is on (the default) with gmssystem_payload.img staged, and ONEOS_GUEST_HIDE_GMS=1 hides Google services: set one of them to 0"
 # The same guard and app-id checks as guest_prepare.sh, here so a refusal comes
@@ -1268,6 +1270,17 @@ while true; do
                     mkdir $STAGE/data/oneos_blur_default 2>/dev/null &&
                     echo \"[UI Activator] window blur: allowed (disable_window_blurs 0, first boot of this stage)\"
             fi
+            # Cache quotas (S25 Ultra session af6c2b17): installd.setAppQuota is
+            # blocked in the container (guest_installd_abi.py; quotas are set on
+            # One UI's /data), but StorageStatsService still worked them out
+            # after app installs and storage changes and logged a stack trace
+            # per app: 33464 in 10 minutes of Play Store updates. Its own
+            # setting turns the calculation off. Every boot, every guest.
+            CQ=\$($BB nsenter -t \$PID -m /system/bin/sh /data/oneos_genv.sh /system/bin/settings get global enable_cache_quota_calculation 2>/dev/null)
+            if [ \"\$CQ\" != 0 ]; then
+                $BB nsenter -t \$PID -m /system/bin/sh /data/oneos_genv.sh /system/bin/settings put global enable_cache_quota_calculation 0 >/dev/null 2>&1 &&
+                    echo \"[UI Activator] cache quotas: calculation off (was \${CQ:-unset}; installd.setAppQuota is blocked in the container)\"
+            fi
             # Density and fold line of the inner panel (run 43), before HOME so the
             # setup wizard starts with them. With no init of its own the guest
             # takes ro.sf.lcd_density from the property area it shares with One
@@ -1735,6 +1748,82 @@ $BB sh -c "
     done
 " </dev/null >/dev/null 2>&1 &
 echo "Session sampler: every 30 s to $STAGE/diag_series.txt"
+
+# Heat cap (S25 Ultra af6c2b17; owner 2026-10-27: cap only when hot). One UI's
+# heat control (SSRM) stops with One UI's system_server, and nothing in the
+# guest caps the CPU: that session ran both clusters at full clock up to 54 C
+# skin. Every 10 s the guest's SKIN temperature (its thermal service on the
+# shared HAL, read as the sampler reads it) sets a level: from 45 C (Samsung's
+# SEVERE) every cpufreq policy's scaling_max_freq is 80% of its
+# cpuinfo_max_freq, from 47 C 65%, from 50 C 50%; a level ends 2 C under where
+# it began. The first reading under 45 C lifts a cap One UI left (run 45: half
+# clock for a whole session); after that the policies are written only when the
+# level changes, each change logged in $STAGE/heat_cap.log. Only scaling_max_freq
+# (the sysfs request) is written: the kernel's own thermal limits stay. It stops
+# with the return (data/oneos_rec_stop) or when the guest's namespace record is
+# gone, giving the policies their full clock back if it had capped them;
+# return_to_oneui.sh stops it as well and does the same (heat_cap.active), for
+# One UI's SSRM to set its own. ONEOS_HEAT_CAP=0 (Advanced: Cool down when hot
+# off): not started. Out of the app cgroup, like the sampler.
+rm -f "$STAGE/heat_cap.active"
+if [ "${ONEOS_HEAT_CAP:-1}" = 1 ]; then
+    : > "$STAGE/heat_cap.active"
+    $BB sh -c "
+    : oneos_heat_cap
+    echo \$\$ > /sys/fs/cgroup/cgroup.procs 2>/dev/null
+    F=$STAGE/heat_cap.log
+    echo \"# \$(date) OneOS heat cap: from 45, 47, 50 C skin every CPU policy at 80, 65, 50% of its top clock (2 C hysteresis)\" > \$F
+    full() {
+        c=''
+        for p in /sys/devices/system/cpu/cpufreq/policy*; do
+            hw=\$(cat \$p/cpuinfo_max_freq 2>/dev/null)
+            case \"\$hw\" in ''|*[!0-9]*) continue ;; esac
+            echo \$hw > \$p/scaling_max_freq 2>/dev/null
+            c=\"\$c \${p##*/}=\$(cat \$p/scaling_max_freq 2>/dev/null)/\$hw\"
+        done
+        echo \"\$(date +%T) \$1: full clock:\$c\" >> \$F
+    }
+    lvl=0; first=1
+    while true; do
+        if [ -f $STAGE/data/oneos_rec_stop ] || [ ! -s $STAGE/guest_mntns ]; then
+            [ \$lvl = 0 ] || full stopped
+            echo \"# \$(date +%T) stopped (the return started, or no guest namespace record)\" >> \$F
+            exit 0
+        fi
+        P=\$(pidof system_server | awk '{print \$1}')
+        sk=''
+        [ -n \"\$P\" ] && sk=\$(timeout 10 $BB nsenter -t \$P -m /system/bin/sh /data/oneos_genv.sh /system/bin/dumpsys thermalservice 2>/dev/null | sed -n '/^Current temperatures from HAL/,/^[^[:space:]]/p' | sed -n 's/.*mValue=\([-0-9.]*\), mType=[0-9]*, mName=SKIN,.*/\1/p' | head -n 1)
+        if [ -n \"\$sk\" ]; then
+            new=\$(awk -v s=\"\$sk\" -v l=\$lvl 'BEGIN { t[1] = 45; t[2] = 47; t[3] = 50; while (l < 3 && s >= t[l + 1]) l++; while (l > 0 && s < t[l] - 2) l--; print l }')
+            if [ \"\$new\" = 0 ] && [ \$first = 1 ]; then
+                capped=''
+                for p in /sys/devices/system/cpu/cpufreq/policy*; do
+                    [ \"\$(cat \$p/scaling_max_freq 2>/dev/null)\" = \"\$(cat \$p/cpuinfo_max_freq 2>/dev/null)\" ] || capped=1
+                done
+                if [ -n \"\$capped\" ]; then full \"skin \$sk C, a cap from before the switch lifted\"
+                else echo \"\$(date +%T) skin \$sk C: no cap\" >> \$F; fi
+            elif [ \"\$new\" = 0 ] && [ \$lvl != 0 ]; then
+                full \"skin \$sk C, level \$lvl to 0\"
+            elif [ \"\$new\" != 0 ] && [ \"\$new\" != \$lvl ]; then
+                case \$new in 1) pct=80 ;; 2) pct=65 ;; *) pct=50 ;; esac
+                c=''
+                for p in /sys/devices/system/cpu/cpufreq/policy*; do
+                    hw=\$(cat \$p/cpuinfo_max_freq 2>/dev/null)
+                    case \"\$hw\" in ''|*[!0-9]*) continue ;; esac
+                    echo \$((hw / 100 * pct)) > \$p/scaling_max_freq 2>/dev/null
+                    c=\"\$c \${p##*/}=\$(cat \$p/scaling_max_freq 2>/dev/null)/\$hw\"
+                done
+                echo \"\$(date +%T) skin \$sk C, level \$lvl to \$new: \$pct%:\$c\" >> \$F
+            fi
+            lvl=\$new; first=0
+        fi
+        sleep 10
+    done
+" </dev/null >/dev/null 2>&1 &
+    echo "Heat cap: on (from 45 C skin; every 10 s to $STAGE/heat_cap.log)"
+else
+    echo "Heat cap: off (ONEOS_HEAT_CAP=0, Cool down when hot off in Advanced)"
+fi
 
 # OneOS dead-man switch. If the guest is not booting, put One UI back by itself:
 # a stuck guest otherwise leaves a black screen and no network (so no remote

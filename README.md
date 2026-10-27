@@ -38,7 +38,7 @@ WeWaffles, and builds its guest images with
 
 ## Status
 
-App version 0.4.22. Samsung flagships with Snapdragon, plus the first two
+App version 0.4.23. Samsung flagships with Snapdragon, plus the first two
 Exynos phones; root is required (tested with KernelSU; Magisk and APatch are
 detected but untested).
 
@@ -67,6 +67,14 @@ main screen (no cover screen layout yet). Nothing has run on Exynos yet.
 Pixel 11 Fold on the Galaxy Z Fold8 Ultra: calls and SMS on both SIMs, 5G and
 Wi-Fi, Bluetooth audio, Google Play and Google's apps, the inner and cover
 screens, blur, and Back to One UI (usually without a restart).
+
+Pixel 9 Pro XL on the Galaxy S25 Ultra (first session, 0.4.22): it starts,
+runs Google's setup wizard, has mobile data on SIM 1, Bluetooth and stereo
+speakers, and Back to One UI works. The phone got very hot. 0.4.23 fixes the
+crash loop behind that, renders at 120 Hz instead of dropping to 60, and adds
+a heat cap (Advanced > Cool down when hot):
+One UI's own heat control does not run in the other system, so from 45 °C
+OneOS slows the processor until the phone cools.
 
 Known open issues for each system are in `docs/pixel-guest.md` and
 `docs/coloros-on-fold.md`.

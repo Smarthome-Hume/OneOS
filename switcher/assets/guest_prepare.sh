@@ -2536,6 +2536,18 @@ if [ -d "$GUEST_SYSTEM_EXT/app/PersistentBackgroundCameraServices" ]; then
     $BB mount -t tmpfs -o ro,size=4k,mode=755 tmpfs "$GUEST_SYSTEM_EXT/app/PersistentBackgroundCameraServices" && \
         echo "Hid guest system_ext/app/PersistentBackgroundCameraServices (services only Pixel's VINTF declares)"
 fi
+# Pixel's ConnectivityThermalPowerManager throttles the Pixel modem and Wi-Fi
+# through GRIL when the phone warms up. Here the modem is Samsung's and GRIL is
+# not in the image: from the first LIGHT thermal status on, each throttling
+# request came back "modem does not support data throttling" and crashed the
+# app, which is persistent: S25 Ultra Pixel 9 Pro XL session af6c2b17, 1394
+# crashes in 15 minutes (a zygote fork every 0.6 s at full CPU clock, skin
+# 54 C).
+if [ -d "$GUEST_SYSTEM_EXT/priv-app/ConnectivityThermalPowerManager" ] && \
+   [ ! -L "$GUEST_SYSTEM_EXT/priv-app/ConnectivityThermalPowerManager" ]; then
+    $BB mount -t tmpfs -o ro,size=4k,mode=755 tmpfs "$GUEST_SYSTEM_EXT/priv-app/ConnectivityThermalPowerManager" && \
+        echo "Hid guest system_ext/priv-app/ConnectivityThermalPowerManager (Pixel modem throttling; crash loop on a Samsung modem)"
+fi
 # The phone's eSIM chip is shared hardware, and an eSIM manager (LPA) in the
 # guest drives it directly: Pixel's EuiccGoogle opens the chip's ISD-R channel
 # itself (run 43). A guest factory reset with "Erase eSIMs", Reset mobile

@@ -60,6 +60,7 @@ internal object SwitchConfirm {
                 add(a.getString(R.string.confirm_calls_2g, system))
             }
             if (hideGms) add(a.getString(R.string.confirm_gms_hidden))
+            if (!SessionPrefs.heatCap(a)) add(a.getString(R.string.confirm_heat_cap_off))
             // An image whose sessions present Google services runs its own setup wizard on a new stage:
             // sign-in and a screen lock are skipped there (docs/pixel-guest.md, "Setup").
             if (image.presentsGms) add(a.getString(R.string.confirm_setup_wizard, system))

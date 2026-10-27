@@ -91,7 +91,8 @@ object ImageCheckJob : BackgroundJob<ImageCheckJob.State>(State(), "oneos-image"
  * 2026-10-24); then the launch record is saved and root's `launch`
  * re-checks everything itself, writes this launch's Google services choice
  * into session.env (`ONEOS_GUEST_HIDE_GMS`, only for an image whose Google
- * services may be hidden, [com.fahadali.oneos.core.model.ImageRef.gmsHideable]),
+ * services may be hidden, [com.fahadali.oneos.core.model.ImageRef.gmsHideable])
+ * and Cool down when hot (`ONEOS_HEAT_CAP`, Advanced, [SessionPrefs.heatCap]),
  * leaves the app's cgroup and starts the session detached in init's mount
  * namespace. The app is expected to be killed a few seconds later, when One
  * UI's framework stops. A refusal keeps its finding (or root's reason) so
@@ -199,7 +200,10 @@ object LaunchJob : BackgroundJob<LaunchJob.State>(State(), "oneos-launch") {
         update(state.copy(detail = "Root is checking everything again and starting the switch…"))
         val reply = RootVerbs.run(
             app, RootScript.Verb.LAUNCH,
-            listOf(if (dryRun) "dry" else "session", BuildConfig.VERSION_CODE.toString(), sid, if (hideGms) "1" else "0"),
+            listOf(
+                if (dryRun) "dry" else "session", BuildConfig.VERSION_CODE.toString(), sid, if (hideGms) "1" else "0",
+                if (SessionPrefs.heatCap(app)) "1" else "0",
+            ),
             silenceMs = 5 * 60_000L,
         )
         if (!reply.ok) {

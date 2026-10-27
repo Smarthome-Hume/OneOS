@@ -14,7 +14,8 @@ import com.fahadali.oneos.core.root.HomeSnapshot
  * last launch (session id, wall-clock and boot time, and how it ended once
  * its logs were read), so the next open can tell that the phone restarted
  * since and show it on Home; the warnings already ticked, per phone and
- * system; Hide Google apps; which "Welcome back" was seen; and the Home of
+ * system; Hide Google apps; Cool down when hot; which "Welcome back" was
+ * seen; and the Home of
  * the last finished check, for the next cold start.
  */
 object SessionPrefs {
@@ -164,6 +165,17 @@ object SessionPrefs {
 
     fun setHideGms(ctx: Context, on: Boolean) {
         p(ctx).edit().putBoolean("hide_gms", on).apply()
+    }
+
+    /**
+     * Cool down when hot (Advanced; owner 2026-10-27), `ONEOS_HEAT_CAP` for every
+     * launch. On by default: One UI's heat control (SSRM) does not run in the
+     * other system, so the session caps the CPU from 45 °C skin (oneos_switch.sh).
+     */
+    fun heatCap(ctx: Context): Boolean = p(ctx).getBoolean("heat_cap", true)
+
+    fun setHeatCap(ctx: Context, on: Boolean) {
+        p(ctx).edit().putBoolean("heat_cap", on).apply()
     }
 
     /**

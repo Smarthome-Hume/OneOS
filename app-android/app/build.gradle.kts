@@ -229,8 +229,8 @@ android {
         // 0.3.4: the Galaxy S25 profile, and OneOS Probe as its own app (flavor probe).
         // 0.3.5: Old stages (delete the stages Prepare moved aside).
         // 0.3.7: the Pixel 11 Fold image and its set on the Fold; the Find X9 Ultra IN image is gone.
-        versionCode = 37
-        versionName = "0.4.22"
+        versionCode = 38
+        versionName = "0.4.23"
     }
 
     // One codebase, two apps (docs/app/DESIGN.md, 0.3.4): "full" is OneOS, the app

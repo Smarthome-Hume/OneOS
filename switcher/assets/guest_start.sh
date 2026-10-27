@@ -399,15 +399,20 @@ fi
 # rates down to 1 Hz) SurfaceFlinger dropped to 1 Hz within 10 ms of every
 # window transition: 9 freezes of 1-2.4 s in 5 minutes (Davey 1038 ms, "Faking
 # VSYNC due to driver stall"). ColorOS kept [120, 120] and never did. Each
-# panel's primary and app-request render ranges are pinned to [60, 120] with
-# SurfaceFlinger's backdoor transaction 1035 (i32 mode id, i64 physical display
-# id, f min, f max; this image's surfaceflinger: readInt32, readUint64,
-# readFloat twice -> setActiveModeFromBackdoor), on the panel's active mode.
-# While pinned, SurfaceFlinger ignores DisplayManager's policies
+# panel's primary and app-request render ranges are pinned with SurfaceFlinger's
+# backdoor transaction 1035 (i32 mode id, i64 physical display id, f min, f max;
+# this image's surfaceflinger: readInt32, readUint64, readFloat twice ->
+# setActiveModeFromBackdoor), on the panel's active mode. While pinned,
+# SurfaceFlinger ignores DisplayManager's policies
 # (setDesiredDisplayModeSpecsInternal returns early on the backdoor flag), so
-# the guest's thermal cap and refresh settings no longer reach it; 60 Hz stays
-# inside the range SurfaceFlinger may choose itself. The parcel result and the
-# policy SurfaceFlinger then reports are logged. Pixel only (no
+# the guest's thermal cap and refresh settings no longer reach it. Up to 0.4.22
+# the range was [60, 120]: SurfaceFlinger's idle timer (250 ms) and content
+# detection then rendered "normal" frame-rate-category content at 60 Hz (S25
+# Ultra af6c2b17: 47 s of the first 2 minutes at 60 Hz, 74 s at 120; testers
+# said it felt like 60 Hz). Since 0.4.23 it is [N, 120] with N the active
+# mode's vsync rate, at most 120: 120 on the S25 Ultra and on the Fold's VRR
+# panels (240 Hz vsync), and never more than a panel can show. The parcel result
+# and the policy SurfaceFlinger then reports are logged. Pixel only (no
 # oplus-services.jar); ONEOS_GUEST_SF_PIN=0 leaves the ranges to DisplayManager.
 if [ -e /system/framework/oplus-services.jar ]; then
     :
@@ -417,14 +422,18 @@ else
     SFDUMP=$(dumpsys SurfaceFlinger 2>/dev/null)
     PINNED=0
     for id in $(dumpsys SurfaceFlinger --display-id 2>/dev/null | sed -n 's/^Display \([0-9][0-9]*\) (HWC display .*/\1/p'); do
-        mode=$(echo "$SFDUMP" | awk -v d="$id" '$0 == "Display " d { f = 1; next } f && /^Display / { f = 0 }
-            f && /^ *activeMode=\{id=[0-9]+,/ { m = $0; sub(/^ *activeMode=\{id=/, "", m); sub(/,.*/, "", m); print m; exit }')
-        case "$mode" in
-            ''|*[!0-9]*) echo "[Pivoted Root] SF render rate on $id: no active mode in the dump, left alone"; continue ;;
+        ml=$(echo "$SFDUMP" | awk -v d="$id" '$0 == "Display " d { f = 1; next } f && /^Display / { f = 0 }
+            f && /^ *activeMode=\{id=[0-9]+,/ { m = $0; sub(/^ *activeMode=\{id=/, "", m); sub(/,.*/, "", m)
+                v = $0; if (!sub(/.*vsyncRate=/, "", v)) v = 0; v = int(v + 0.5); if (v > 120) v = 120
+                print m, v; exit }')
+        mode=${ml% *} lo=${ml#* }
+        case "$mode:$lo" in
+            :*|*[!0-9:]*|*:) echo "[Pivoted Root] SF render rate on $id: no active mode in the dump, left alone"; continue ;;
         esac
+        [ "$lo" -ge 60 ] || lo=60
         # The call waits on SurfaceFlinger's main thread: never longer than 5 s here.
-        r=$(timeout 5 service call SurfaceFlinger 1035 i32 "$mode" i64 "$id" f 60 f 120 2>&1 | tr -s ' \n' ' ' | cut -c1-160)
-        echo "[Pivoted Root] SF render rate pinned to 60-120 Hz on $id (mode $mode): $r"
+        r=$(timeout 5 service call SurfaceFlinger 1035 i32 "$mode" i64 "$id" f "$lo" f 120 2>&1 | tr -s ' \n' ' ' | cut -c1-160)
+        echo "[Pivoted Root] SF render rate pinned to $lo-120 Hz on $id (mode $mode): $r"
         PINNED=$((PINNED + 1))
     done
     [ "$PINNED" = 0 ] && echo "[Pivoted Root] SF render rate: no physical displays listed yet, left to DisplayManager"

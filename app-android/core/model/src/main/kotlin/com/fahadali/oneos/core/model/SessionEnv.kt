@@ -25,6 +25,10 @@ package com.fahadali.oneos.core.model
  * ([ImageRef.gmsHideable]); guest_prepare.sh then hides them for the session.
  * The Pixel image has them but presents its own GmsCore ([ImageRef.presentsGms]),
  * which the session scripts refuse to hide, so 0.3.7 has no image that may.
+ *
+ * [HEAT_CAP] (0.4.23) is the other: Prepare writes 1, and root's `launch`
+ * writes Advanced's Cool down when hot. 1 caps the CPU while the skin is hot
+ * (oneos_switch.sh), 0 leaves it at full clock. Neither touches the way back.
  */
 object SessionEnv {
     const val FILE_NAME = "session.env"
@@ -35,6 +39,9 @@ object SessionEnv {
 
     /** 1: hide Play services, the Play Store and their helpers in the guest for this session (guest_prepare.sh). */
     const val HIDE_GMS = "ONEOS_GUEST_HIDE_GMS"
+
+    /** 1: cap the CPU from 45 °C skin during the session (oneos_switch.sh); 0: full clock all session. */
+    const val HEAT_CAP = "ONEOS_HEAT_CAP"
 
     /** How the return brings One UI back: always in place, with the reboot as its failsafe (return_to_oneui.sh). */
     const val RETURN_MODE = "ONEOS_RETURN_MODE"
@@ -55,6 +62,7 @@ object SessionEnv {
         "ONEOS_GUEST_COMPACT_WINDOW" to Regex("[01]"),
         "ONEOS_GUEST_WALLPAPER_GRID" to Regex("[01]"),
         HIDE_GMS to Regex("[01]"),
+        HEAT_CAP to Regex("[01]"),
         RETURN_MODE to Regex("inplace"),
     )
 
@@ -117,6 +125,7 @@ object SessionEnv {
         )
         out.putAll(form)
         out[HIDE_GMS] = "0"
+        out[HEAT_CAP] = "1"
         out[RETURN_MODE] = "inplace"
         return out
     }
@@ -168,6 +177,8 @@ object SessionEnv {
             else -> for ((k, v) in values(profile)) {
                 val got = seen[k] ?: continue
                 when {
+                    // Either value is the launch's own choice (the pattern allows only 0 or 1).
+                    k == HEAT_CAP -> Unit
                     k != HIDE_GMS -> if (got != v) p += "$k=$got does not match profile $id ($v)"
                     got == "1" && image?.gmsHideable != true -> p += if (image?.googleServices == true) {
                         "$HIDE_GMS=1, but the ${image.shortName} image's sessions present Google services, which cannot be hidden"

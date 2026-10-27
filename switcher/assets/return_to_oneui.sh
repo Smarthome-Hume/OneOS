@@ -188,6 +188,21 @@ pkill -9 -f "system_server" 2>/dev/null || true
 pkill -9 -f org.lineageos 2>/dev/null || true
 pkill -9 -x zygote64 2>/dev/null || true
 kill -9 $(pidof surfaceflinger) 2>/dev/null || true
+# The heat cap (oneos_switch.sh) is stopped (its loop names system_server, so
+# the pkill above may have done it already) before the CPU policies get their
+# full clock back, for One UI's SSRM to set its own.
+pkill -9 -f "oneos_heat_cap" 2>/dev/null || true
+if [ -f $S/heat_cap.active ]; then
+    hc=""
+    for p in /sys/devices/system/cpu/cpufreq/policy*; do
+        hw=$(cat "$p/cpuinfo_max_freq" 2>/dev/null)
+        case "$hw" in ''|*[!0-9]*) continue ;; esac
+        echo "$hw" > "$p/scaling_max_freq" 2>/dev/null
+        hc="$hc ${p##*/}=$(cat "$p/scaling_max_freq" 2>/dev/null)/$hw"
+    done
+    rm -f $S/heat_cap.active
+    echo "Heat cap: stopped, CPU policies at full clock:$hc"
+fi
 
 # Every process still in the container's mount namespace (recorded by
 # oneos_switch.sh). The host's own namespace is never touched.

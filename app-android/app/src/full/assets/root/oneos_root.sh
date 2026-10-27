@@ -24,10 +24,11 @@
 #   table <bytes>                     stdin: host_installd.table
 #   env <bytes>                       stdin: session.env
 #   finish <profile> <image> <set> <versionCode>
-#   launch <session|dry> <versionCode> <sessionId> <hideGms>
+#   launch <session|dry> <versionCode> <sessionId> <hideGms> <heatCap>
 #                                     hideGms 0|1: this launch's
 #                                     ONEOS_GUEST_HIDE_GMS (1 only for an
-#                                     image in IMAGES_GMS)
+#                                     image in IMAGES_GMS); heatCap 0|1: its
+#                                     ONEOS_HEAT_CAP (Cool down when hot)
 #   recover                           restore One UI's persist props after a
 #                                     session that never returned (hard reset)
 #   old-list                          read only: every oneos.old-* and .trash-*
@@ -110,7 +111,7 @@ SET_COMMON="services_patched.jar oplus-services_patched.jar vold_patched service
 SET_PIXEL="services_patched.jar vold_patched service.incremental_patched.so guards.txt oneos-telephony.jar oneos-telephony.sha256 OneOSPhoneInjection.apk OneOSPixelStatusBar.apk OneOSGuest.apk art_payload.img i18n_payload.img runtime_payload.img sdkext_payload.img crashrecovery_payload.img extservices_payload.img permission_payload.img wifi_payload.img appsearch_payload.img mediaprovider_payload.img adservices_payload.img rkpd_payload.img healthfitness_payload.img ondevicepersonalization_payload.img configinfrastructure_payload.img cellbroadcast_payload.img bt_payload.img nfcservices_payload.img telephonycore_payload.img conscrypt_payload.img profiling_payload.img gmssystem_payload.img"
 # Host /data trees of switcher/assets/bridges.sh (relative to /data).
 BRIDGE_HOSTS="app app-staging user user_de dalvik-cache misc/profiles data media misc/user misc_ce/0/sdksandbox misc_de/0/sdksandbox misc_ce/0/rollback misc_de/0/rollback resource-cache"
-ENV_KEYS="ONEOS_APP ONEOS_PROFILE ONEOS_SPLASH_COMPONENT ONEOS_WALLPAPER_PROBE ONEOS_RECORD ONEOS_LOGCAT ONEOS_GUEST_FORM ONEOS_GUEST_FOLD ONEOS_COVER_TSP ONEOS_GUEST_FOLD_CONTINUE ONEOS_GUEST_UNFOLD_PORTRAIT ONEOS_GUEST_COMPACT_WINDOW ONEOS_GUEST_WALLPAPER_GRID ONEOS_GUEST_HIDE_GMS ONEOS_RETURN_MODE"
+ENV_KEYS="ONEOS_APP ONEOS_PROFILE ONEOS_SPLASH_COMPONENT ONEOS_WALLPAPER_PROBE ONEOS_RECORD ONEOS_LOGCAT ONEOS_GUEST_FORM ONEOS_GUEST_FOLD ONEOS_COVER_TSP ONEOS_GUEST_FOLD_CONTINUE ONEOS_GUEST_UNFOLD_PORTRAIT ONEOS_GUEST_COMPACT_WINDOW ONEOS_GUEST_WALLPAPER_GRID ONEOS_GUEST_HIDE_GMS ONEOS_HEAT_CAP ONEOS_RETURN_MODE"
 # Images whose Google services a session may hide (ONEOS_GUEST_HIDE_GMS=1;
 # ImageRef.gmsHideable): the Find X9 Ultra IN build (again from 0.4.11). The
 # Pixel images have them too, but their sessions present their own GmsCore,
@@ -423,7 +424,8 @@ write_raw_id() {
 
 # --- Checks shared by table/env/finish and launch ---------------------------
 # session.env: every allowed key once, each with exactly the profile's value;
-# ONEOS_GUEST_HIDE_GMS 0, or 1 when the image is in IMAGES_GMS.
+# ONEOS_GUEST_HIDE_GMS 0, or 1 when the image is in IMAGES_GMS;
+# ONEOS_HEAT_CAP 1 (Prepare) or 0 (a launch with Cool down when hot off).
 env_value() {
     case "$1" in
         ONEOS_APP|ONEOS_LOGCAT) echo 1 ;;
@@ -435,6 +437,7 @@ env_value() {
         ONEOS_COVER_TSP|ONEOS_GUEST_FOLD_CONTINUE|ONEOS_GUEST_UNFOLD_PORTRAIT|ONEOS_GUEST_COMPACT_WINDOW|ONEOS_GUEST_WALLPAPER_GRID)
             if [ "$2" = fold ]; then echo 1; else echo 0; fi ;;
         ONEOS_GUEST_HIDE_GMS) echo 0 ;;
+        ONEOS_HEAT_CAP) echo 1 ;;
         # 0.4.7: Back to One UI restarts One UI in place; a failed check reboots.
         ONEOS_RETURN_MODE) echo inplace ;;
         *) return 1 ;;
@@ -460,6 +463,7 @@ check_env() { # <file> <form> <profile> <image>
             in_list "$4" "$IMAGES_GMS" || refuse "session.env hides Google services, but $4 has none a session may hide"
             continue
         fi
+        [ "$key" = ONEOS_HEAT_CAP ] && [ "$val" = 0 ] && continue
         [ "$val" = "$want" ] || refuse "session.env $key=$val (profile $3: $want)"
     done < "$f"
     for k in $ENV_KEYS; do
@@ -758,13 +762,14 @@ find_tools() {
 }
 
 do_launch() {
-    [ $# -eq 4 ] || usage "launch <session|dry> <versionCode> <sessionId> <hideGms>"
-    mode=$1 code=$2 sid=$3 gms=$4
+    [ $# -eq 5 ] || usage "launch <session|dry> <versionCode> <sessionId> <hideGms> <heatCap>"
+    mode=$1 code=$2 sid=$3 gms=$4 heat=$5
     case "$mode" in session|dry) ;; *) usage "launch mode $mode" ;; esac
     is_dec "$code" || usage "launch versionCode $code"
     case "$sid" in *[!0-9a-f]*|'') usage "launch session id" ;; esac
     [ ${#sid} -eq 16 ] || usage "launch session id"
     case "$gms" in 0|1) ;; *) usage "launch hideGms $gms" ;; esac
+    case "$heat" in 0|1) ;; *) usage "launch heatCap $heat" ;; esac
     [ -n "$T" ] || [ "$(id -u)" = 0 ] || refuse "not root"
     step "checks"
     read_marker || refuse "the stage has no OneOS marker: prepare first"
@@ -815,11 +820,13 @@ do_launch() {
     [ $# -eq 2 ] && ge "$(awk -v a="$1" -v s="$2" 'BEGIN { printf "%.0f", a * s }')" 11811160064 ||
         refuse "less than 11 GiB free on /data"
 
-    # This launch's Google services choice (the Switch screen; Prepare wrote 0):
-    # the one line of session.env a launch changes, after every check. The next
-    # launch writes its own. (Before the test root's stop, so the tests see it.)
-    sed "s/^ONEOS_GUEST_HIDE_GMS=.*/ONEOS_GUEST_HIDE_GMS=$gms/" "$STAGE/session.env" > "$STAGE/session.env.tmp" &&
-        grep -q -x "ONEOS_GUEST_HIDE_GMS=$gms" "$STAGE/session.env.tmp" && own "$STAGE/session.env.tmp" 0644 &&
+    # This launch's Google services choice (the Switch screen; Prepare wrote 0)
+    # and its Cool down when hot (Advanced; Prepare wrote 1): the two lines of
+    # session.env a launch changes, after every check. The next launch writes
+    # its own. (Before the test root's stop, so the tests see it.)
+    sed -e "s/^ONEOS_GUEST_HIDE_GMS=.*/ONEOS_GUEST_HIDE_GMS=$gms/" -e "s/^ONEOS_HEAT_CAP=.*/ONEOS_HEAT_CAP=$heat/" "$STAGE/session.env" > "$STAGE/session.env.tmp" &&
+        grep -q -x "ONEOS_GUEST_HIDE_GMS=$gms" "$STAGE/session.env.tmp" && grep -q -x "ONEOS_HEAT_CAP=$heat" "$STAGE/session.env.tmp" &&
+        own "$STAGE/session.env.tmp" 0644 &&
         mv -f "$STAGE/session.env.tmp" "$STAGE/session.env" || die "could not write session.env for this launch"
     [ -z "$T" ] || refuse "test root: every launch check passed, nothing was started"
 

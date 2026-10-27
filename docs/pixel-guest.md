@@ -817,6 +817,163 @@ of their own. vold and service.incremental.so have the same code as the
 Pixel 11 builds at other offsets (make-overlays.sh), and the crashrecovery
 APEX the same `RescueParty.isDisabled()`.
 
+### First session: Galaxy S25 Ultra (af6c2b17, 2026-10-27)
+
+App 0.4.22, profile `s-ultra-8750`. It booted, went through Google's setup
+wizard, and came back with Back to One UI after 9 min 50 s. The phone ran
+very hot: thermal status SEVERE (3) 1 minute after boot, CRITICAL (4) from
+6.5 minutes, skin 54.0 °C at most, AP 67 °C. It was charging the whole time,
+and the battery still went from 92% to 88%. Both CPU clusters stayed at their
+full clock (3.53 and 4.47 GHz) all session, because nothing caps the CPU in
+the guest: One UI's thermal control (SSRM/SIOP) stops with One UI's
+system_server, and it had set no cap before the switch.
+
+The biggest load was one crash loop.
+- Pixel's ConnectivityThermalPowerManager (persistent, system_ext priv-app)
+  throttles the Pixel modem and Wi-Fi through GRIL. The first LIGHT status
+  was at 09:22:36 (skin 40.7 °C). From then on, every throttling request it
+  sent (`TelephonyManager.sendThermalMitigationRequest`) came back
+  `IllegalArgumentException: modem does not support data throttling`, and
+  the app crashed. That was 1394 crashes and restarts in 15 minutes, about
+  95 a minute.
+- Each restart is a zygote fork and an app start at full clock. Its broadcasts
+  also add most of the 34,000 `Sending oneway calls to frozen process` lines.
+- Since 0.4.23, guest_prepare.sh hides the app folder with a read-only tmpfs,
+  as it does for PersistentBackgroundCameraServices.
+- The modem is Samsung's and GRIL is not in the image, so the app can do
+  nothing here anyway.
+
+There was a second, smaller load. `installd.setAppQuota` is blocked in the
+container, because quotas are set on One UI's /data. Even so,
+StorageStatsService kept working out cache quotas after every Play Store
+update and logged a stack trace for each app: 33,464 failures, mostly during
+the updates at 09:29-09:32 and 09:36-09:37. Since 0.4.23 the UI activator sets
+`enable_cache_quota_calculation=0` in the guest on every boot. With that
+setting at 0, `StorageStatsService$H.handleMessage` returns before doing
+anything.
+
+The rest of the log is first-boot work: the Play Store updating apps
+(Finsky, `notification_cancel_all` for com.android.vending), Android System
+Intelligence, and Accessibility re-reading its shortcuts after each package
+change. In 15 minutes the log captured 1.34 million lines.
+
+Window blur was not the cause. The sampler shows `mBlurEnabled=true` for the
+whole session; the GPU ran at 160 of 1200 MHz when diag_40 was taken; the
+launcher's 90th-percentile GPU time was 6 ms. In Android 17 the switch is
+**Settings > Accessibility > Color and motion > Reduce blur effects**
+(`BlurSwitchPreference`, writing `disable_window_blurs`). Developer options
+still lists "Allow window-level blurs" (key `enable_blurs_on_windows` in
+development_settings.xml), but nothing in SettingsGoogle handles that key any
+more, so switching it changes nothing. The UI activator sets
+`disable_window_blurs=0` only once per stage, and BlurController still reads
+that setting (guest_blur_no_thermal.py removes only the thermal check), so
+"Reduce blur effects" keeps working across sessions.
+
+Since 0.4.23 a heat cap runs during every session, on every guest
+(oneos_switch.sh; owner: "cap only when hot").
+- Every 10 s it reads the guest's SKIN temperature, the same way the sampler
+  does.
+- From 45 °C (Samsung's SEVERE) it caps each cpufreq policy's
+  `scaling_max_freq` at 80% of `cpuinfo_max_freq`; from 47 °C at 65%; from
+  50 °C at 50%. Each level ends once the skin is 2 °C below where that level
+  began.
+- The first reading under 45 °C also lifts a cap One UI left from before the
+  switch (run 45 ran at half clock for that reason).
+- Only the sysfs request is written, so the kernel's own thermal limits still
+  apply. Each change is logged in `heat_cap.log`.
+- At the return, the keeper and return_to_oneui.sh (`heat_cap.active`) put
+  every policy back at full clock, and One UI's SSRM then sets its own caps.
+- Advanced > Cool down when hot (on by default) turns it off: the launch
+  writes `ONEOS_HEAT_CAP=0`, root's fifth `launch` word. Home's Switch dialog
+  then says the phone can get very hot.
+
+"Feels like 60 Hz" (testers): the panel was at 120 Hz the whole time, but
+SurfaceFlinger rendered at 60 Hz for 47 s and at 120 Hz for 74 s by the 90 s
+diag. guest_start.sh's backdoor pin (run 42, against the Fold's 1 Hz drops)
+allowed a render range of [60, 120]. Inside that range, SurfaceFlinger's 250 ms
+idle timer and content detection sent "normal" frame-rate-category content to
+60 Hz: this display's categories are normal 60 and high 90. Since 0.4.23 the
+floor is the active mode's vsync rate, at most 120. That gives [120, 120] on
+the S25 Ultra and on the Fold's 240 Hz VRR panels, and it is never above what
+a panel can show.
+
+Pixel Camera (installed by the Play Store) stays on its icon: it crashes
+without Pixel's camera HAL. Open Camera works. Weather took about 0.1 s to
+start and loaded its data. The tester who saw most apps stuck on their icon
+has no logs here yet.
+
+Galaxy S25 (f7d5ec8c, profile `s-8750`, a stage already set up, 2 minutes,
+ended with the volume keys):
+- Every app the tester opened drew within 0.4 s: Photos, YouTube, Play Store,
+  Settings, two Telegram clients, the guest's OneOS app. Open Camera took 8.3 s.
+- Skin reached 43.4 °C at most; One UI's cap from before the switch (3.07 and
+  3.51 GHz) stayed. ConnectivityThermalPowerManager started but did not crash
+  in those 2 minutes.
+- Render rate: 25 s at 60 Hz and 94 s at 120 Hz (fixed above).
+- SIM 1 was in service. Bluetooth was off: it was switched off in that stage
+  (`PersistentState=0`; the S25 Ultra's was 1 and came up).
+- Samsung's composer logged "AI Scaler Config ... is not present" about 40
+  times a second during the guest, and a few per minute under One UI. It is
+  vendor log noise.
+
+The camera, on both S25 phones: Samsung's cameraserver answers some
+`ICameraService.getCameraCharacteristics` calls from the Android 17 framework
+with a NullPointerException ("Failed to load metadata for CameraId-2"). The
+Quick Settings flashlight tile does not initialise. One `ICameraServiceListener`
+callback from the host arrives misparsed
+(`BadParcelableException: Allocation of size 7209057`). The two sides'
+interfaces differ, as installd's did (guest_installd_abi.py). Bridging
+ICameraService is open; Open Camera works on the cameras it can read.
+
+What differs (2026-10-27). One UI 9 on the Z Fold8 Ultra (CP2A.260605.016)
+was read on the phone with the ART module's dexdump. It was compared with the
+Pixel 9 Pro XL (CP3A.261005.005) and the Pixel 11 Fold (CD1A.261005.003.B1;
+the Pixel 11 Pro has the same build) with `scripts/aidl-table.py`.
+- `ICameraService`: Samsung adds `notifyDeviceStateChangeSync` at 23. The
+  Pixels' `createDefaultRequest`, `isSessionConfigurationWithParametersSupported`,
+  `getSessionCharacteristics` and `warmUp` (23-26) are 24-27 on Samsung, with
+  the same signatures. Samsung's own methods are 28-38.
+- `ICameraDeviceUser`: Samsung adds `setParameters(String)` at 13. Every Pixel
+  method from `getInputSurface` (13) to `updateOutputConfigurations` (28) is one
+  higher on Samsung, with the same signature. A Pixel camera session's
+  `createDefaultRequest` (14) reaches Samsung's `getInputSurface`, and so on.
+- `ICameraServiceListener`: Samsung's 9 is `onCameraDeviceStateChanged`. The
+  Pixel 9 Pro XL's 9 is `onStatusChangedBatched` (the misparse above). The
+  Pixel 11 Fold has no 9, so it ignores the call.
+- `CameraCompatibilityInfo` (no size header): the Pixel 9 Pro XL writes a sixth
+  field, `mShouldOverrideLensFacingFrontToBack`. Samsung reads it as the next
+  parcelable's null marker, and gets a null `AttributionSourceState` in
+  `getCameraInfo`, `connect`, `connectDevice`, `getCameraCharacteristics` and
+  `getSessionCharacteristics` (the NullPointerException). The Pixel 11 Fold
+  writes Samsung's five.
+- `ICameraDeviceCallbacks`, the offline and injection interfaces, and the other
+  parcels (CaptureRequest, OutputConfiguration, SessionConfiguration,
+  CaptureResultExtras, CameraStatus, AttributionSourceState) are the same. The
+  only differences are exception helpers the compiler outlines.
+So the Pixel 11 images need the two renumberings. The Pixel 9 Pro XL also
+needs the listener's 9 ignored and Samsung's five-field
+`CameraCompatibilityInfo`. Only the Java side has been compared: NDK camera and
+camera API1 clients go through the guest's native libraries, which were not
+looked at.
+
+Calls, Bluetooth and the speakers in the same session (nothing was paired and
+no call was made):
+- SIM 1 was in service on LTE with carrier aggregation, at 2-3 bars from
+  the signal poll; the second slot was out of service.
+- The call-audio keeper set `g_call_sim_slot=0x01` in the HAL at the start;
+  there was no call.
+- IMS is not there, as on the other phones, so calls go over 2G/3G.
+- Bluetooth reached ON with A2DP offload. `l_a2dp_format` was sent to the HAL.
+- LE Audio was off for the session (no `IBluetoothAudioProviderFactory/default`
+  on SM8750), and SCO is opened by the guest's own stack.
+- The only pairing attempt (09:25:56, failed) was the setup wizard's "copy
+  from another phone" link, not earbuds.
+- The speaker output is stereo and played 36 s of sound. The volume-curve
+  error at 09:22:18 comes once, as audioserver starts and before AudioService
+  sets the volumes.
+- `PermissionController_patched.apk missing` is expected on Pixel sets: the
+  patch is ColorOS's.
+
 ## Open (not seen on a phone yet)
 
 - `/product/overlay/*__yogi__*` RROs carry the Pixel Fold's display config

@@ -86,8 +86,8 @@ class StageScriptTest {
 
         fun finish(setId: String = set.id) = fr.run(RootScript.Verb.FINISH, profile.id, imageId, setId, code)
 
-        fun launch(mode: String = "session", hideGms: String = "0", code: String = this.code) =
-            fr.run(RootScript.Verb.LAUNCH, mode, code, "0123456789abcdef", hideGms)
+        fun launch(mode: String = "session", hideGms: String = "0", code: String = this.code, heatCap: String = "1") =
+            fr.run(RootScript.Verb.LAUNCH, mode, code, "0123456789abcdef", hideGms, heatCap)
 
         fun prepare(mode: String = "new") {
             ok(begin(mode))
@@ -1096,6 +1096,31 @@ class StageScriptTest {
         }
     }
 
+    /**
+     * 0.4.23, Cool down when hot (Advanced): Prepare writes ONEOS_HEAT_CAP=1, a launch writes its own
+     * choice after every check, env takes 0 or 1 and nothing else, and launch needs the word.
+     */
+    @Test
+    fun aLaunchWritesItsHeatCap() {
+        eachShell { fr ->
+            val s = Stager(fr)
+            s.prepare()
+            val env = File(fr.stage, "session.env")
+            assertTrue(env.readLines().contains("ONEOS_HEAT_CAP=1"))
+            refused(s.launch(heatCap = "0"), "test root: every launch check passed")
+            assertTrue(env.readLines().contains("ONEOS_HEAT_CAP=0"))
+            assertEquals(SessionEnv.generate(s.profile).replace("ONEOS_HEAT_CAP=1", "ONEOS_HEAT_CAP=0"), env.readText())
+            refused(s.launch(heatCap = "1"), "test root: every launch check passed")
+            assertEquals(SessionEnv.generate(s.profile), env.readText())
+            // The launcher never builds a launch without the word (RootScript.problems, tested below).
+            assertTrue(runCatching { fr.run(RootScript.Verb.LAUNCH, "session", s.code, "0123456789abcdef", "0") }.isFailure)
+            ok(s.begin("keep"))
+            s.ok(s.env(SessionEnv.generate(s.profile).replace("ONEOS_HEAT_CAP=1", "ONEOS_HEAT_CAP=0")))
+            ok(s.begin("keep"))
+            refused(s.env(SessionEnv.generate(s.profile).replace("ONEOS_HEAT_CAP=1", "ONEOS_HEAT_CAP=2")), "ONEOS_HEAT_CAP=2")
+        }
+    }
+
     // --- The names up to 0.3.6 (lineage_stage, lineage_stage.old-*): migrate_legacy ---
 
     /**
@@ -1324,10 +1349,13 @@ class StageScriptTest {
         assertTrue(RootScript.problems(RootScript.Verb.BEGIN, listOf("new", "f8u", "coloros17-findn6", "4")).isNotEmpty())
         assertTrue(RootScript.problems(RootScript.Verb.FINISH, listOf("f8u", "coloros17-findn6", "4")).isNotEmpty())
         assertEquals(emptyList<String>(), RootScript.problems(RootScript.Verb.FINISH, listOf("f8u", "coloros17-findn6", "n6-f8u", "4")))
-        assertTrue(RootScript.problems(RootScript.Verb.LAUNCH, listOf("session", "4", "\$(id)", "0")).isNotEmpty())
+        assertTrue(RootScript.problems(RootScript.Verb.LAUNCH, listOf("session", "4", "\$(id)", "0", "1")).isNotEmpty())
         assertTrue(RootScript.problems(RootScript.Verb.LAUNCH, listOf("session", "4", "0123456789abcdef")).isNotEmpty())
-        assertTrue(RootScript.problems(RootScript.Verb.LAUNCH, listOf("session", "4", "0123456789abcdef", "2")).isNotEmpty())
-        assertEquals(emptyList<String>(), RootScript.problems(RootScript.Verb.LAUNCH, listOf("dry", "4", "0123456789abcdef", "1")))
+        assertTrue(RootScript.problems(RootScript.Verb.LAUNCH, listOf("session", "4", "0123456789abcdef", "2", "1")).isNotEmpty())
+        // 0.4.23: launch carries the heat cap too (0 or 1), and needs it.
+        assertTrue(RootScript.problems(RootScript.Verb.LAUNCH, listOf("session", "4", "0123456789abcdef", "0")).isNotEmpty())
+        assertTrue(RootScript.problems(RootScript.Verb.LAUNCH, listOf("session", "4", "0123456789abcdef", "0", "2")).isNotEmpty())
+        assertEquals(emptyList<String>(), RootScript.problems(RootScript.Verb.LAUNCH, listOf("dry", "4", "0123456789abcdef", "1", "0")))
         assertTrue(RootScript.problems(RootScript.Verb.RECOVER, listOf("x")).isNotEmpty())
         assertEquals(emptyList<String>(), RootScript.problems(RootScript.Verb.KEEP_RAW, listOf("10385141760", "a".repeat(64))))
         // Rendered, the arguments are one plain `set --` line.
